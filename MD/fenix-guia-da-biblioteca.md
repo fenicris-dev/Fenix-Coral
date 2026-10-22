@@ -1,4 +1,4 @@
-# GUIA DA BIBLIOTECA FÊNIX (v4.0)
+# GUIA DA BIBLIOTECA FÊNIX (v4.1)
 
 Este guia explica, em português claro, tudo o que existe na biblioteca Fênix: o que cada função do Fênix Core faz e para que serve cada regra do Livro das Regras. Ele também funciona como o **Changelog da biblioteca** (Parte 4). Acompanha todo pacote novo e é atualizado a cada versão, junto com o livro, o core, os templates e os documentos legais, que andam sempre com o mesmo número (regra 7).
 
@@ -20,7 +20,7 @@ Endereço base de tudo: https://fenicris-dev.github.io/Fenix-Core/
 | `MD/fenix-livro-das-regras.md`, `DOC/fenix-livro-das-regras.docx` | pastas `MD/` e `DOC/` | O Livro das Regras. |
 | `MD/fenix-guia-da-biblioteca.md`, `DOC/fenix-guia-da-biblioteca.docx` | pastas `MD/` e `DOC/` | Este guia. |
 
-Todo material com versão tem duas cópias (regra 11): a **neutra**, sem versão no nome (é a que os apps usam), e a **com versão no nome** (`-v4.0`), só para controle interno.
+Todo material com versão tem duas cópias (regra 11): a **neutra**, sem versão no nome (é a que os apps usam), e a **com versão no nome** (`-v4.1`), só para controle interno.
 
 ## PARTE 2. O FÊNIX CORE, FUNÇÃO POR FUNÇÃO
 
@@ -147,11 +147,11 @@ O campo se formata sozinho enquanto o usuário digita. Ninguém precisa pedir: v
 | `telefone` | Escolhe fixo ou celular pelo primeiro dígito depois do DDD (9 é celular). | `79999680880` vira `(79) 9 9968-0880`; `7932221234` vira `(79) 3222-1234` |
 | `cep` | Traço depois do quinto dígito. | `49000000` vira `49000-000` |
 | `data`, `hora` | `dd/mm/aaaa` e `HH:mm`. | `25122026` vira `25/12/2026` |
-| `placa` | Maiúsculas; formato antigo (`ABC-1234`) ou Mercosul (`ABC1D23`). | |
+| `placa` | Maiúsculas, sempre com hífen depois das três letras: Mercosul ou antiga. | `0er0c32` vira `0ER-0C32`; `abc1234` vira `ABC-1234` |
 | `ip`, `mac` | IP com pontos (cada parte até 255) e MAC com dois pontos, maiúsculo. Úteis em CFTV. | `192168001010` vira `192.168.001.010` |
 | `numero` | Só dígitos. | |
 | `ie` | Inscrição estadual. Informe a UF em `data-mask-uf`: SE, BA e SP têm formato próprio; as outras UFs ficam só com dígitos. Aceita `ISENTO`. | UF `SE`: `123456789` vira `12345678-9` |
-| `rg` | Números e a letra X, sem pontuação (cada estado usa um formato). | `12.345.678-x` vira `12345678X` |
+| `rg` | Formato `00.000.000-0`; o último caractere pode ser X. | `528972580` vira `52.897.258-0` |
 | `uf` | Duas letras, maiúsculas. | `se1` vira `SE` |
 
 **Funções de apoio** (todas devolvem texto ou valor, sem mexer na tela):
@@ -278,6 +278,7 @@ O arquivo está na raiz da biblioteca e **parte das regras publicadas no seu con
 Cada linha diz o que mudou e o que isso exige dos apps. As versões v1.x e v2.x do core vieram antes do livro atual; as versões v3.x são niveladas entre livro, core, templates e documentos legais.
 
 ### Versões v3.x (niveladas)
+- **v4.1**: placa sempre com hífen depois das três letras (`ABC-1D23`, `ABC-1234`) e RG no formato `00.000.000-0`. Apps: SIM, só quem usa essas máscaras.
 - **v4.0**: moeda no padrão definido (1 dígito `R$ 1`, 2 `R$ 1,0`, 3 `R$ 1,00`, 4 `R$ 10,00`; com zero na frente vêm os decimais); máscaras novas `ie`, `rg` e `uf`; logos com nome com sublinhado (`Fenix_Logo_Silver.png`, `Fenix_Logo_Gray.png`); `firestore.rules` parte das regras publicadas e fecha três brechas (vínculo com qualquer empresa, alteração livre de convites e base de CPF/CNPJ aberta a qualquer logado); core grava `conviteToken` e recusa convite cancelado. Apps: SIM, na próxima alteração.
 - **v3.9**: máscaras automáticas em todo campo com formato fixo (regras 38 a 40): novo `FenixCore.mascaras`, ligado por `data-mask` e `mascaras.auto()`; CPF e CNPJ no mesmo campo, moeda pelos centavos, telefone, CEP, data, hora, placa, IP, MAC, percentual e número. O Painel testa as máscaras e tem um grupo para digitar. Apps: SIM, na próxima alteração cada app troca as máscaras próprias pelas do core.
 - **v3.8**: nova regra 55 (roteiro para trazer um app antigo ao padrão, seção 9). Novo arquivo-base `firestore.rules` (proposta de regras do Firestore para as coleções do core), com duas cópias, nos Endereços oficiais e no Painel; a regra 46 aponta para ele. Apps: nada.
@@ -302,6 +303,7 @@ Cada linha diz o que mudou e o que isso exige dos apps. As versões v1.x e v2.x 
 - **v2.1**: anotação dos apps já no padrão. Apps: não.
 
 ### Fênix Core, funções acrescentadas (nada foi removido)
+- **v4.1**: ajuste de `mascaras.placa` (hífen sempre) e `mascaras.rg` (formato `00.000.000-0`); `valorLimpo("rg")` devolve números e X.
 - **v4.0**: `mascaras.ie`, `rg`, `uf`; regra nova da moeda; `moedaParaNumero` lê a vírgula decimal; `aceitarConvite` grava `conviteToken` e recusa convite cancelado.
 - **v3.9**: `FenixCore.mascaras` (máscaras automáticas e funções de apoio, seção 2.13).
 - **v3.5**: `localidades.buscarPorCEPSemBanco`.
