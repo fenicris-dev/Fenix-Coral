@@ -1,6 +1,6 @@
 /**
  * ============================================================================
- * FÊNIX CORE v4.0
+ * FÊNIX CORE v4.1
  *
  * CONVENÇÃO DE NOME (DUAS CÓPIAS A CADA ENTREGA):
  * O endereço oficial é SEMPRE fenix-core.js (sem número de versão no nome nem
@@ -235,6 +235,10 @@
         "conviteToken" no registro de membro (o firestore.rules v4.0 usa isso
         para provar o convite) e recusa convite cancelado. Só acréscimos e
         correções; nenhuma função foi removida.
+ * v4.1 — Ajustes das máscaras a pedido do Cristiano: placa sempre com hífen
+        depois das três letras (ABC-1D23 Mercosul e ABC-1234 antiga); RG no
+        formato 00.000.000-0 (o último caractere pode ser X). valorLimpo("rg")
+        devolve só números e X.
  * ============================================================================
  */
 
@@ -2073,7 +2077,7 @@ const mascaras = {
   },
   placa(v) {
     const c = String(v == null ? "" : v).toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 7);
-    return c.length >= 5 && /\d/.test(c[4]) ? c.slice(0, 3) + "-" + c.slice(3) : c;
+    return c.length > 3 ? c.slice(0, 3) + "-" + c.slice(3) : c;
   },
   ip(v) {
     const partes = [];
@@ -2108,9 +2112,19 @@ const mascaras = {
       default: return d.slice(0, 14);
     }
   },
-  // RG: números e a letra X no final, sem pontuação (cada estado usa um
-  // formato diferente). Maiúsculo.
-  rg(v) { return String(v == null ? "" : v).toUpperCase().replace(/[^0-9X]/g, "").slice(0, 12); },
+  // RG no formato 00.000.000-0 (o último caractere pode ser X). Maiúsculo.
+  rg(v) {
+    let c = "";
+    for (const ch of String(v == null ? "" : v).toUpperCase()) {
+      if (/\d/.test(ch) && c.length < 9) c += ch;
+      else if (ch === "X" && c.length === 8) c += ch;
+    }
+    let r = c.slice(0, 2);
+    if (c.length > 2) r += "." + c.slice(2, 5);
+    if (c.length > 5) r += "." + c.slice(5, 8);
+    if (c.length > 8) r += "-" + c.slice(8, 9);
+    return r;
+  },
   uf(v) { return String(v == null ? "" : v).toUpperCase().replace(/[^A-Z]/g, "").slice(0, 2); },
   dataParaISO(texto) {
     const m = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(String(texto || ""));
@@ -2127,6 +2141,7 @@ const mascaras = {
       case "data": return mascaras.dataParaISO(texto);
       case "hora": { const m = /^(\d{2}):(\d{2})$/.exec(String(texto || "")); return m && +m[1] < 24 && +m[2] < 60 ? texto : null; }
       case "placa": return String(texto || "").replace(/-/g, "");
+      case "rg": return String(texto || "").toUpperCase().replace(/[^0-9X]/g, "");
       case "ip": case "mac": return String(texto || "");
       default: return _soDigitos(texto);
     }
@@ -2141,7 +2156,7 @@ const mascaras = {
     input._fenixMascara = t;
     const numerico = ["cpfcnpj", "cpf", "cnpj", "cep", "telefone", "moeda", "percentual", "data", "hora", "numero"].includes(t);
     input.setAttribute("inputmode", t === "ip" ? "decimal" : numerico ? "numeric" : "text");
-    input.setAttribute("maxlength", String({ cpfcnpj: 18, cpf: 14, cnpj: 18, cep: 9, telefone: 16, moeda: 24, percentual: 11, data: 10, hora: 5, placa: 8, ip: 15, mac: 17, numero: 20, ie: 18, rg: 13, uf: 2 }[t]));
+    input.setAttribute("maxlength", String({ cpfcnpj: 18, cpf: 14, cnpj: 18, cep: 9, telefone: 16, moeda: 24, percentual: 11, data: 10, hora: 5, placa: 8, ip: 15, mac: 17, numero: 20, ie: 18, rg: 12, uf: 2 }[t]));
     if (t === "ip") input.setAttribute("autocomplete", "off");
     const fimDoTexto = t === "moeda" || t === "percentual";
     input.addEventListener("input", () => {
