@@ -1,4 +1,4 @@
-# GUIA DA BIBLIOTECA FÊNIX (v4.1)
+# GUIA DA BIBLIOTECA FÊNIX (v4.3)
 
 Este guia explica, em português claro, tudo o que existe na biblioteca Fênix: o que cada função do Fênix Core faz e para que serve cada regra do Livro das Regras. Ele também funciona como o **Changelog da biblioteca** (Parte 4). Acompanha todo pacote novo e é atualizado a cada versão, junto com o livro, o core, os templates e os documentos legais, que andam sempre com o mesmo número (regra 7).
 
@@ -11,8 +11,9 @@ Endereço base de tudo: https://fenicris-dev.github.io/Fenix-Core/
 | `fenix-core.js` | raiz | Biblioteca de funções que todo app carrega (módulo ES, exporta `FenixCore`). |
 | `index.html` | raiz | Painel da biblioteca: testa cada endereço oficial, confere se tudo está na mesma versão e roda testes ao vivo de CNPJ e CEP. |
 | `firestore.rules` | raiz | Regras de segurança do Firestore: parte das publicadas no console e traz os reforços v4.0 (regra 46). Publique primeiro o core, depois as regras no console. |
-| `fenix-template-login.html` | raiz | Layout oficial de login de todo app com senha. |
+| `fenix-template-login.html` | raiz | Layout oficial de login de todo app com senha, com o farol passando ao fundo e o botão do Google escondido até a licença definitiva. |
 | `fenix-template-onboarding.html` | raiz | Layout oficial da tela de primeiro acesso. |
+| `fenix-template-splash.html` | raiz | Layout oficial do splash de abertura, com os holofotes duplos de baixo para cima (regras 32 e 59). |
 | `Icon/Fenix_Icone_64, 128, 192, 512.png` | pasta `Icon/` | Ícone da águia (branca sobre o degradê): favicon, cabeçalho, PWA, splash e ícone provisório. |
 | `Logo/Fenix_Logo_Azul*.png`, `Fenix_Logo_Branca*.png` | pasta `Logo/` | Logo oficial (Azul) e segunda opção (Branca), também em 320 e 640 px. |
 | `Logo/Fenix_Logo_Black.png`, `Fenix_Logo_Silver.png`, `Fenix_Logo_Gray.png` | pasta `Logo/` | Logos auxiliares, para escolher o melhor contraste. |
@@ -20,7 +21,7 @@ Endereço base de tudo: https://fenicris-dev.github.io/Fenix-Core/
 | `MD/fenix-livro-das-regras.md`, `DOC/fenix-livro-das-regras.docx` | pastas `MD/` e `DOC/` | O Livro das Regras. |
 | `MD/fenix-guia-da-biblioteca.md`, `DOC/fenix-guia-da-biblioteca.docx` | pastas `MD/` e `DOC/` | Este guia. |
 
-Todo material com versão tem duas cópias (regra 11): a **neutra**, sem versão no nome (é a que os apps usam), e a **com versão no nome** (`-v4.1`), só para controle interno.
+Todo material com versão tem duas cópias (regra 11): a **neutra**, sem versão no nome (é a que os apps usam), e a **com versão no nome** (`-v4.3`), só para controle interno.
 
 ## PARTE 2. O FÊNIX CORE, FUNÇÃO POR FUNÇÃO
 
@@ -88,11 +89,11 @@ Todas devolvem `{ cep, logradouro, bairro, cidade, uf, ... }` ou `null` se o CEP
 
 Todos usam o banco e recebem o `app` ou o `db` que vem do `initFirebase`.
 
-- **`criarModuloAuth(app)`**: login por e-mail e senha. Devolve `aoMudarEstado(callback)`, `entrar(email, senha)`, `criarConta(email, senha)`, `sair()` e `usuarioAtual()`.
+- **`criarModuloAuth(app)`**: login por e-mail e senha e pelo Google. Devolve `aoMudarEstado(callback)`, `entrar(email, senha)`, `criarConta(email, senha)`, `sair()`, `usuarioAtual()` e, desde a v4.2, `entrarComGoogle()`, `resultadoRedirecionamento()` e `redefinirSenha(email)` (seção 2.14).
 - **`criarModuloEmpresas(db)`**: `criarEmpresa(uid, email, nome)` (cria a empresa e faz o usuário dono), `obterEmpresa(empresaId)`, `obterEmpresaDoUsuario(uid)` e `repararVinculo(uid, dadosParciais)`.
 - **`criarModuloConvites(db, baseUrl)`**: convidar técnicos por link. `criarConvite`, `obterConvite`, `aceitarConvite`, `listarConvitesPendentes` e `cancelarConvite`. Cada convite é uma chave aleatória de uso único.
 - **`criarModuloEquipe(db)`**: `listarMembros(empresaId)` e `removerMembro(empresaId, uid)`.
-- **`criarModuloAppData(db, empresaId, nomeApp)`**: guarda listas inteiras do app na nuvem, um documento por chave. `salvar(chave, lista)` e `carregar(chave)`.
+- **`criarModuloAppData(db, empresaId, nomeApp)`**: guarda listas inteiras do app na nuvem, um documento por chave. `salvar(chave, lista)`, `carregar(chave)` e, desde a v4.2, `escutar(chave, aoMudar)`, que avisa a cada alteração feita em qualquer aparelho.
 - **`criarModuloCatalogoEmpresa(db, empresaId, nomeColecao, campoChave)`**: cria uma coleção própria do app, isolada dentro da empresa, sem mexer no core. Devolve `listar()`, `salvar(obj)` (cria ou atualiza pela chave) e `excluir(chave)`. Atalhos prontos: `criarModuloMateriais`, `criarModuloProdutosServicos` e `criarModuloFamiliasMateriais`.
 - **`criarModuloPessoas(db, empresaId)`**: clientes de um app dentro da empresa (diferente do cadastro nacional da seção 2.4). `listar`, `salvar`, `arquivar(obj, arquivado)` e `excluir`.
 
@@ -163,6 +164,47 @@ O campo se formata sozinho enquanto o usuário digita. Ninguém precisa pedir: v
 
 **Atenção:** a moeda não aceita valor negativo, e o valor inicial de um campo deve ser posto com `definirValor`, não direto no `value`. `moedaParaNumero` lê o texto mostrado (com vírgula decimal): `"R$ 1.234,56"` vira `1234.56` e `"R$ 1,0"` vira `1`.
 
+### 2.14 Login com Google, dados pessoais e sincronia entre aparelhos (v4.2)
+
+**Login com Google** (módulo `criarModuloAuth`, regra 56):
+- **`entrarComGoogle()`:** abre a janela do Google e devolve o usuário. Se o navegador bloquear a janela (comum em PWA no celular), cai sozinho para o redirecionamento e devolve `null`; ao voltar, o app chama `resultadoRedirecionamento()`. Para forçar o redirecionamento: `entrarComGoogle({ redirecionar: true })`.
+- **`resultadoRedirecionamento()`:** chame ao abrir o app. Devolve o usuário se ele acabou de voltar do Google, ou `null`.
+- **`redefinirSenha(email)`:** envia o e-mail de redefinição de senha.
+- **Antes de usar:** o endereço do app (`fenicris-dev.github.io`) precisa estar em Firebase > Authentication > Configurações > Domínios autorizados, e o provedor Google precisa estar ativado em Authentication > Método de login.
+
+**Dados pessoais** (app sem empresa; o dado é do usuário): `criarModuloDadosPessoais(db, uid, nomeApp)` grava em `dados_pessoais/{uid}/{nomeApp}/{chave}`, o caminho que as regras do Firestore já liberam só para o dono do uid. Devolve `salvar(chave, dados)`, `carregar(chave)`, `excluir(chave)`, `listar()`, `escutar(chave, aoMudar)` e `escutarTudo(aoMudar)`. Os dois `escutar` devolvem a função que para de escutar.
+
+**Sincronia entre aparelhos** (regra 57): `criarSincronia(db, opcoes)` mantém uma tabela igual em todos os aparelhos da mesma conta, em tempo real.
+- **Opções:** `escopo` (`"pessoal"` com `uid`, ou `"empresa"` com `empresaId`), `nomeApp`, `tabela`, `lerLocal()` e `gravarLocal(lista)` (onde o app guarda a lista no aparelho), `aoMudar(lista, info)` (redesenhar a tela; `info.origem` é `"local"` ou `"nuvem"`) e `aoMudarEstado(estado)` (indicador de conexão: `sincronizado`, `sincronizando`, `offline` ou `erro`). Cada registro precisa do campo `id`.
+- **Funções:** `iniciar()`, `parar()`, `salvar(registro)`, `excluir(id)`, `forcarSincronia()` (botão "Sincronizar"), `estado()` e `pendentes()`.
+- **Como funciona:** cada registro vira um documento com a hora da última alteração. Em conflito vale a alteração mais recente, por registro. Excluir grava uma marca de "apagado", para valer nos outros aparelhos. Sem internet, as alterações ficam numa fila no aparelho e sobem sozinhas ao reconectar (evento `online` e nova tentativa a cada 5 minutos, regra 3).
+- **Primeiro uso:** o que só existe no aparelho sobe para a nuvem. Se o mesmo `id` já existir na nuvem, vale a nuvem.
+- **Limite:** usa o relógio do aparelho; um aparelho com a hora muito errada pode "ganhar" conflitos.
+- **Exemplo mínimo:** `const sync = FenixCore.criarSincronia(db, { escopo: "pessoal", uid, nomeApp: "fenix-gestor-do-tempo", tabela: "tarefas", lerLocal, gravarLocal, aoMudar: desenhar }); sync.iniciar(); sync.salvar({ id: "t1", titulo: "..." });`
+- **Por que o Gestor do Tempo não sincronizava:** guardava só no `localStorage`, que é de cada aparelho. Para sincronizar, o app precisa de login com a mesma conta, banco ativo e `criarSincronia` (ou `criarModuloDadosPessoais`) no lugar da gravação local direta.
+
+### 2.15 Licença definitiva e toque de abertura (v4.3)
+
+**Licença definitiva** (`FenixCore.licenca`, regra 58):
+- **Onde fica a licença:** campo `licenca` do documento `empresas/{id}`. O valor `"definitiva"` é a licença definitiva de uso; qualquer outro valor, ou a falta do campo, é teste. Só o Cristiano grava, pelo console do Firebase.
+- **`ehDefinitiva(dados)`:** devolve `true` se o objeto da empresa (ou o texto) é `"definitiva"`, sem diferenciar maiúsculas.
+- **`daEmpresa(db, empresaId)`:** lê a empresa e diz se a licença é definitiva (precisa de login).
+- **`hashEmail(email)`:** devolve o SHA-256 do e-mail em minúsculas, que é o ID do espelho. O card "Licença definitiva e toque" do Painel gera esse ID para você copiar.
+- **`porEmail(db, email)`:** consulta o espelho `licencas/{ID}`; funciona antes do login.
+- **`lembrar(app, sim)` e `lembrada(app)`:** guardam e leem, neste aparelho, se a licença é definitiva (por app).
+- **`liberaGoogle(db, { app, email, empresaId })`:** diz se o botão do Google deve aparecer. Nunca dá erro: sem rede, vale o que o aparelho lembra.
+- **`confirmarAposGoogle(db, modAuth, usuario, app)`:** chame logo depois de `entrarComGoogle()`. Se a licença do usuário (pela empresa ou pelo espelho do e-mail) não for definitiva, sai da conta e devolve `false`.
+- **Por que existem dois lugares:** antes do login o app não sabe quem é o usuário; por isso o botão usa a lembrança do aparelho ou o espelho pelo e-mail. A confirmação depois do Google é a trava de verdade.
+- **Para dar uma licença definitiva:** no console do Firebase, 1) na empresa, crie o campo `licenca` com o texto `definitiva`; 2) para cada e-mail que vai usar o Google, crie o documento `licencas/ID` (ID gerado pelo Painel) com o campo `licenca = definitiva`.
+
+**Toque de abertura "Asas"** (`FenixCore.som`, regra 59): três notas, Lá, Ré e Lá, duas curtas e uma longa, no ritmo de Fê-ni-x, geradas pelo navegador, sem arquivo de áudio.
+- **`tocarAbertura({ somentePermitido, forcar })`:** toca o toque e devolve `true` se tocou. Toca no máximo uma vez por sessão (a menos que `forcar`). Com `somentePermitido`, só toca se o navegador já liberar o som (uso no splash); sem ele, use dentro de um clique (login que deu certo).
+- **`ligado()` e `definir(sim)`:** leem e gravam a chave Som deste aparelho (padrão: ligado).
+- **`sintetizar(contexto, inicio)`:** escreve as três notas em um contexto de áudio (uso interno e testes).
+- **Limite:** navegadores só liberam som depois de um toque do usuário; por isso o toque normal sai no login e não ao abrir o app.
+
+**Animações (só CSS, nos templates):** o `fenix-template-login.html` tem o farol passando ao fundo; o `fenix-template-splash.html` tem os holofotes duplos. As duas param quando o aparelho pede para reduzir movimento.
+
 ## PARTE 3. O LIVRO DAS REGRAS, REGRA POR REGRA
 
 ### Seção 1. Arquitetura
@@ -229,7 +271,7 @@ O campo se formata sozinho enquanto o usuário digita. Ninguém precisa pedir: v
 51. **Evitar regressão:** conferir o escape do Python em template literals e blocos órfãos depois de refatorar.
 
 ### Seção 7. Processo
-52. **Livro vivo e Ficha de aplicação:** em app novo, ou existente trazido para alteração, preencher a Ficha com o Cristiano antes de começar.
+52. **Livro vivo e Ficha de aplicação:** em app novo, ou existente trazido para alteração, preencher a Ficha com o Cristiano antes de começar, perguntando sempre se o app terá login com Google (grupo H) e se vai funcionar em tempo real em mais de um aparelho (grupo I).
 53. **Selo do Livro:** o app declara `fenix-livro` (versão aplicada) e `fenix-ficha` (grupos marcados) no `<head>` e mostra "Padrão: Livro das Regras Fênix vX.Y" na Sobre. Selo igual à versão do livro significa que já está aplicado; selo antigo, aplicar só o que o Histórico indica; sem selo, aplicar tudo.
 
 ### Seção 8. Dashboard
@@ -238,6 +280,14 @@ O campo se formata sozinho enquanto o usuário digita. Ninguém precisa pedir: v
 ### Seção 9. Trazer um app antigo ao padrão
 55. **Roteiro do app antigo:** quando um app existente vem para alteração: (a) ler o selo (sem selo, aplicar tudo; selo antigo, só o que o Histórico indica); (b) preencher a Ficha; (c) fazer o inventário do que o app cumpre e do que falta, regra por regra, e mostrar antes de mexer; (d) proteger os dados: chaves e formatos do localStorage e das coleções não mudam sem migração e backup; (e) aplicar em cinco etapas, cada uma testada: 1) core, banco desligado e selo, 2) identidade, 3) acesso, 4) cadastros e máscaras, 5) qualidade (Changelog e Manual, Sobre, backup, PDF e dashboard); (f) não mexer em telas que não foram pedidas e avisar quando uma regra conflitar com algo do app; (g) entregar pelo Como entregar, com a sequência de versões do próprio app e a Ficha no Changelog; (h) anotar o app em Apps já no padrão.
 
+### Seção 10. Login com Google e sincronia entre aparelhos
+56. **Login com Google (grupo H):** botão "Entrar com Google" do template ligado a `criarModuloAuth(app).entrarComGoogle()`, nunca código de login próprio; `resultadoRedirecionamento()` ao abrir; `redefinirSenha(email)` na tela de esqueci a senha; domínio do app autorizado no Firebase Authentication.
+57. **Sincronização entre aparelhos (grupo I):** exige banco ativo e login; usa só o core (`criarModuloDadosPessoais`, `criarSincronia`); comportamento obrigatório: tempo real, offline com fila, conflito pela alteração mais recente, exclusão que vale em todos, primeiro uso sem duplicar, indicador de conexão com `aoMudarEstado`, backup passando pelo `sync.salvar`; testar com dois aparelhos.
+
+### Seção 11. Licença definitiva, animações e toque de abertura
+58. **Licença definitiva (grupo H):** o botão Entrar com Google só aparece com a licença definitiva (campo `licenca = "definitiva"` na empresa, gravado só pelo console, mais o espelho `licencas/{SHA-256 do e-mail}` para a tela de login); `liberaGoogle` decide o botão e `confirmarAposGoogle` confirma depois do login.
+59. **Animações e toque (todos os apps):** farol passando ao fundo do login e holofotes duplos de baixo para cima no splash (templates prontos, só CSS, respeitam reduzir movimento); toque Asas (Lá, Ré, Lá) sintetizado pelo core, que toca no login que deu certo e, no splash, só se o navegador já permitir; chave Som no login.
+
 ### firestore.rules, bloco por bloco
 O arquivo está na raiz da biblioteca e **parte das regras publicadas no seu console** (as versões registradas no cabeçalho). O que já funcionava foi mantido; o que mudou na v4.0 está marcado com `[v4.0]`. Tudo que não está liberado é negado.
 
@@ -245,7 +295,8 @@ O arquivo está na raiz da biblioteca e **parte das regras publicadas no seu con
 
 - **Funções de apoio:** `autenticado`, `pertenceAEmpresa` (vínculo aprovado em `usuarios_empresa`), `souDonoDaEmpresa`, e, novas, `temVinculoAprovado`, `membroComPapel` e `conviteValido` (convite da empresa, não usado e não cancelado).
 - **Base compartilhada:** `produtos_servicos` e `cidades` como antes. **[v4.0]** `pessoas_fisicas` e `pessoas_juridicas` (CPF e CNPJ, dados pessoais) só para quem tem vínculo aprovado com uma empresa; antes, qualquer conta Google logada em qualquer app lia a base inteira.
-- **`empresas/{id}`:** como estava (qualquer logado lê e cria; ninguém altera nem apaga).
+- **`empresas/{id}`:** qualquer logado lê; ninguém altera nem apaga. **[v4.3]** criar exige deixar o campo `licenca` de fora ou usar `teste`: o app nunca cria uma empresa como definitiva; só o console grava `definitiva`.
+- **[v4.3] `licencas/{ID}`:** espelho da licença para a tela de login (ID = SHA-256 do e-mail). Leitura só pontual (`get`, sem listar) e sem gravação pelo app; só o console cria.
 - **`usuarios_empresa/{uid}`:** leitura e remoção como antes. **[v4.0]** criar o vínculo exige já ter o registro de membro da empresa com o mesmo papel; antes, qualquer logado criava o próprio vínculo como dono de qualquer empresa e passava a ver os dados dela. Atualizar sem trocar empresa nem papel continua livre.
 - **`convites/{token}`:** ler um convite pelo token, listar e criar como antes. **[v4.0]** a alteração fica restrita: o titular só cancela; o convidado só marca como usado, uma vez, com o próprio uid. Antes, qualquer logado alterava qualquer campo de um convite não usado.
 - **[v4.0] `empresas/{id}/membros/{uid}`:** o dono cria o próprio registro (a empresa tem de ter `donoUid` igual ao uid); o técnico cria o seu com o `conviteToken` de um convite válido da empresa. Só o titular altera; o titular ou o próprio apaga.
@@ -260,6 +311,8 @@ O arquivo está na raiz da biblioteca e **parte das regras publicadas no seu con
 5. Técnico lê os dados da empresa: permitido; grava na coleção `membros`: negado.
 6. Usuário sem vínculo lê `pessoas_fisicas`: negado; com vínculo aprovado: permitido.
 7. Gestor de Tempo grava em `dados_pessoais/{o próprio uid}`: permitido; no de outro usuário: negado.
+8. Criar uma empresa com `licenca: "definitiva"`: negado; sem o campo, ou com `"teste"`: permitido.
+9. Ler `licencas/{ID}` (get) sem estar logado: permitido; listar a coleção ou gravar nela: negado.
 
 **Pontos de atenção**
 - Um app com o core antigo guardado no cache do aparelho não grava o `conviteToken`, então não consegue aceitar convite até abrir com internet e baixar o core novo.
@@ -267,7 +320,7 @@ O arquivo está na raiz da biblioteca e **parte das regras publicadas no seu con
 - Mantidos como estavam no console: a regra `empresas/{id}/cidades` com `write: false` (o curinga da empresa já libera a gravação, então ela não bloqueia nada) e a leitura de `empresas/{id}` por qualquer logado, que expõe o nome da empresa e o e-mail do dono. Dá para fechar depois, se você quiser.
 
 ### Seções finais do livro
-- **Ficha de aplicação:** sempre valem as regras 1 a 3, 5 a 22, 39, 40, 47 a 53 e 55. Grupos marcáveis: A banco ativo (4, 46), B login (23 a 32), C PF/PJ (33 a 38, 41, 42), D produto (43), E backup (44), F PDF (45), G dashboard (54).
+- **Ficha de aplicação:** sempre valem as regras 1 a 3, 5 a 22, 39, 40, 47 a 53, 55 e 59. Grupos marcáveis: A banco ativo (4, 46), B login (23 a 32), C PF/PJ (33 a 38, 41, 42), D produto (43), E backup (44), F PDF (45), G dashboard (54), H login com Google (56 e 58), I sincronização entre aparelhos (57). Os grupos H e I vêm desmarcados e são perguntados sempre.
 - **Histórico do livro:** diz o que cada versão muda para os apps e se afeta ou não.
 - **Endereços oficiais:** a lista única de endereços; só use os dela.
 - **Como entregar:** declarar a versão; nome padrão; selo e Ficha no Changelog; manual MD e PDF; duas cópias; guia da biblioteca atualizado; rodar o Painel e tocar em "Testar tudo"; zip com `LEIAME.txt` quando houver mais de um arquivo; avisar se um pedido contrariar o livro.
@@ -278,6 +331,8 @@ O arquivo está na raiz da biblioteca e **parte das regras publicadas no seu con
 Cada linha diz o que mudou e o que isso exige dos apps. As versões v1.x e v2.x do core vieram antes do livro atual; as versões v3.x são niveladas entre livro, core, templates e documentos legais.
 
 ### Versões v3.x (niveladas)
+- **v4.3**: login com Google só com a licença definitiva (regra 58); farol passando ao fundo do login e holofotes duplos no splash, que ganha `fenix-template-splash.html` (regra 59); toque Asas; core com `FenixCore.licenca` e `FenixCore.som`; regras do Firestore com o campo `licenca` protegido e a coleção `licencas`. Apps: SIM, na próxima alteração.
+- **v4.2**: Ficha com os grupos H (login com Google) e I (sincronização entre aparelhos), perguntados sempre; regras 56 e 57 (seção 10); core com `entrarComGoogle`, `resultadoRedirecionamento`, `redefinirSenha`, `criarModuloDadosPessoais`, `criarSincronia` e `escutar` nos dados por empresa. Apps: SIM, na próxima alteração.
 - **v4.1**: placa sempre com hífen depois das três letras (`ABC-1D23`, `ABC-1234`) e RG no formato `00.000.000-0`. Apps: SIM, só quem usa essas máscaras.
 - **v4.0**: moeda no padrão definido (1 dígito `R$ 1`, 2 `R$ 1,0`, 3 `R$ 1,00`, 4 `R$ 10,00`; com zero na frente vêm os decimais); máscaras novas `ie`, `rg` e `uf`; logos com nome com sublinhado (`Fenix_Logo_Silver.png`, `Fenix_Logo_Gray.png`); `firestore.rules` parte das regras publicadas e fecha três brechas (vínculo com qualquer empresa, alteração livre de convites e base de CPF/CNPJ aberta a qualquer logado); core grava `conviteToken` e recusa convite cancelado. Apps: SIM, na próxima alteração.
 - **v3.9**: máscaras automáticas em todo campo com formato fixo (regras 38 a 40): novo `FenixCore.mascaras`, ligado por `data-mask` e `mascaras.auto()`; CPF e CNPJ no mesmo campo, moeda pelos centavos, telefone, CEP, data, hora, placa, IP, MAC, percentual e número. O Painel testa as máscaras e tem um grupo para digitar. Apps: SIM, na próxima alteração cada app troca as máscaras próprias pelas do core.
@@ -303,6 +358,8 @@ Cada linha diz o que mudou e o que isso exige dos apps. As versões v1.x e v2.x 
 - **v2.1**: anotação dos apps já no padrão. Apps: não.
 
 ### Fênix Core, funções acrescentadas (nada foi removido)
+- **v4.3**: `FenixCore.licenca` (`ehDefinitiva`, `daEmpresa`, `hashEmail`, `porEmail`, `lembrar`, `lembrada`, `liberaGoogle`, `confirmarAposGoogle`) e `FenixCore.som` (`tocarAbertura`, `ligado`, `definir`, `sintetizar`), seção 2.15.
+- **v4.2**: `criarModuloAuth`: `entrarComGoogle`, `resultadoRedirecionamento`, `redefinirSenha`; `criarModuloDadosPessoais`; `criarSincronia`; `criarModuloAppData.escutar` (seção 2.14).
 - **v4.1**: ajuste de `mascaras.placa` (hífen sempre) e `mascaras.rg` (formato `00.000.000-0`); `valorLimpo("rg")` devolve números e X.
 - **v4.0**: `mascaras.ie`, `rg`, `uf`; regra nova da moeda; `moedaParaNumero` lê a vírgula decimal; `aceitarConvite` grava `conviteToken` e recusa convite cancelado.
 - **v3.9**: `FenixCore.mascaras` (máscaras automáticas e funções de apoio, seção 2.13).
@@ -323,7 +380,7 @@ Cada linha diz o que mudou e o que isso exige dos apps. As versões v1.x e v2.x 
 
 ## PARTE 5. RECEITA RÁPIDA: APP NOVO EM 10 PASSOS
 
-1. Preencha a Ficha de aplicação com o Cristiano (regra 52) e escolha o nome do arquivo `fenix-nome-do-app` (regra 10).
+1. Preencha a Ficha de aplicação com o Cristiano (regra 52), perguntando sempre se terá login com Google e se vai funcionar em mais de um aparelho, e escolha o nome do arquivo `fenix-nome-do-app` (regra 10).
 2. Ponha o carregador oficial do core no `<head>` (regra 2) e chame `FenixCore.init("fenix-nome-do-app")`.
 3. Crie a chave `FENIX_BANCO_ATIVO = false` e escreva as leituras e gravações do banco atrás dela (regra 1).
 4. Monte o login e o onboarding a partir dos templates (regras 23 e 29), o splash (32), o avatar (30 e 31) e o rodapé padrão (22).
