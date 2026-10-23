@@ -1,23 +1,25 @@
-Biblioteca Fênix v4.3
+Biblioteca Fênix v4.4
 
-Raiz do repositório: index.html (Painel), fenix-core.js, fenix-template-login.html, fenix-template-onboarding.html, fenix-template-splash.html (NOVO), firestore.rules
+Raiz do repositório: index.html (Painel), fenix-core.js, fenix-template-login.html, fenix-template-onboarding.html, fenix-template-splash.html, firestore.rules
 Icon/   : Fenix_Icone_128.png (os demais ícones já estão no repositório)
-Termos/ : fenix-termos-de-uso.html, fenix-politica-de-privacidade.html
+Termos/ : fenix-termos-de-uso.html, fenix-politica-de-privacidade.html (atualizados em 23/10/2026)
 MD/     : fenix-livro-das-regras.md, fenix-guia-da-biblioteca.md (guia e changelog da biblioteca)
 DOC/    : fenix-livro-das-regras.docx, fenix-guia-da-biblioteca.docx
-versoes/: cópias com a versão no nome, só para controle interno (nenhum app aponta para elas). Não suba esta pasta para a raiz do repositório.
+versoes/: cópias com a versão no nome, só para controle interno (nenhum app aponta para elas). NUNCA suba esta pasta para a raiz do repositório.
 
-Novo na v4.3:
-- Login com Google só para quem tem a licença definitiva de uso (regra 58): o botão do template começa escondido.
-- Farol alto passando ao fundo do login e holofotes duplos de baixo para cima no splash (regra 59); novo fenix-template-splash.html.
-- Toque de abertura "Asas" (Lá, Ré, Lá), sintetizado no navegador, com a chave Som no login.
-- Core: FenixCore.licenca e FenixCore.som (seção 2.15 do guia).
-- firestore.rules: a empresa não pode ser criada como definitiva; nova coleção licencas (leitura pontual, gravação só pelo console).
+Novo na v4.4:
+- firestore.rules: empresas/{id} só para o dono e membros (o convite leva o nome da empresa).
+- Licença com validade opcional (campo licencaAte, AAAA-MM-DD), FenixCore.licenca.situacao e a mensagem única MENSAGEM_GOOGLE.
+- FenixCore.preferencias: Som de abertura, Reduzir animações e Tema claro/escuro/automático; login, splash e onboarding reagem a elas. Regra 60 e grupo J (tema escuro opcional) na Ficha.
+- sync.importarLista: importa o backup inteiro pela sincronia.
+- Termos de Uso (cláusula 3, licença de uso) e Política de Privacidade (dados de licença e preferências), redigidos sem revisão de advogado por decisão do Cristiano.
+- Checklist de publicação do firestore.rules, teste com dois aparelhos e aviso da pasta versoes/ em Como entregar; modelo de registro em Apps já no padrão.
 
-Como dar a licença definitiva (no console do Firebase, Firestore):
-1) No documento empresas/{id}, crie o campo licenca (texto) = definitiva.
-2) Para cada e-mail que vai usar o Google, crie o documento licencas/ID com o campo licenca = definitiva. O ID é gerado no Painel: abra "Licença definitiva e toque (manual)", digite o e-mail e copie o ID.
+ORDEM PARA PUBLICAR (importante, porque o core v4.4 grava o nome da empresa no convite e as regras novas fecham a leitura da empresa):
+1) core, templates, Termos e Política no GitHub;
+2) abra o Painel e toque em "Testar tudo" e em "Rodar testes ao vivo";
+3) no console do Firebase, copie as regras atuais para um arquivo de backup, cole as novas no Playground e rode o roteiro do guia (itens 1 a 11);
+4) publique as regras, abra um app real, entre e grave um registro. Se algo falhar, recoloque o backup.
 
-Ordem para publicar: 1) core e templates no GitHub; 2) depois cole o firestore.rules no console do Firebase (guarde uma cópia das regras antigas e teste no Playground, roteiro no guia).
-Depois de publicar, abra https://fenicris-dev.github.io/Fenix-Core/ e toque em "Testar tudo" e em "Rodar testes ao vivo".
+Licença definitiva (console do Firebase): campo licenca = definitiva em empresas/{id} e o documento licencas/ID com licenca = definitiva (ID gerado no card manual do Painel). Opcional: licencaAte = AAAA-MM-DD nos dois.
 Antes do login com Google: ative o Google em Authentication > Método de login e inclua fenicris-dev.github.io em Domínios autorizados.

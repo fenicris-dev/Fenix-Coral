@@ -1,6 +1,12 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
+<script>
+/* Preferências do aparelho (regras 59 e 60): aplica tema e animações reduzidas antes de desenhar a tela. */
+(function () { try { var d = document.documentElement;
+  if (localStorage.getItem('fenix_movimento') === 'reduzido') d.classList.add('fenix-sem-movimento');
+  var t = localStorage.getItem('fenix_tema'); if (t === 'escuro' || t === 'claro') d.setAttribute('data-tema', t); } catch (e) {} })();
+</script>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <meta name="theme-color" content="#041273" />
@@ -10,7 +16,7 @@
   <style>
     /* =============================================================
        FÊNIX — MÓDULO DE ACESSO (login / cadastro / recuperar senha)
-       Template v4.3 — usa SOMENTE a paleta oficial Fênix.
+       Template v4.4 — usa SOMENTE a paleta oficial Fênix.
        Fonte: do sistema (sem Google Fonts, funciona offline).
     ============================================================= */
     :root {
@@ -227,9 +233,22 @@
     @media (prefers-reduced-motion: reduce) {
       .fenix-farol { animation: none; opacity: .5; transform: translateX(24vw); }
     }
+    html.fenix-sem-movimento .fenix-farol { animation: none; opacity: .5; transform: translateX(24vw); }
     .auth-som { display: flex; align-items: center; justify-content: center; gap: .5rem; min-height: 44px;
       margin-top: .6rem; color: var(--fenix-branco); font-size: .82rem; cursor: pointer; }
     .auth-som input { width: 18px; height: 18px; accent-color: var(--fenix-amarelo); }
+
+    /* ---------- TEMA ESCURO (regra 60): só a paleta Fênix; escolha do usuário ou do sistema ---------- */
+    html[data-tema="escuro"] { --fenix-card:#041273; --fenix-texto:#ffffff; --fenix-input-txt:#ffffff; --fenix-bg:#020733; --auth-border:rgba(255,255,255,.28); --auth-muted:rgba(255,255,255,.72); --auth-track:rgba(255,255,255,.12); }
+    html[data-tema="escuro"] .auth-input::placeholder { color: rgba(255,255,255,.5); }
+    html[data-tema="escuro"] .auth-link { color: var(--fenix-amarelo); }
+    html[data-tema="escuro"] .auth-alert.success { color: var(--fenix-branco); }
+    @media (prefers-color-scheme: dark) {
+      html:not([data-tema="claro"]) { --fenix-card:#041273; --fenix-texto:#ffffff; --fenix-input-txt:#ffffff; --fenix-bg:#020733; --auth-border:rgba(255,255,255,.28); --auth-muted:rgba(255,255,255,.72); --auth-track:rgba(255,255,255,.12); }
+      html:not([data-tema="claro"]) .auth-input::placeholder { color: rgba(255,255,255,.5); }
+      html:not([data-tema="claro"]) .auth-link { color: var(--fenix-amarelo); }
+      html:not([data-tema="claro"]) .auth-alert.success { color: var(--fenix-branco); }
+    }
   </style>
 </head>
 <body>
@@ -403,7 +422,7 @@
   <a href="https://wa.me/5579999680880" target="_blank" rel="noopener">&lt;Cristiano Fênix/&gt;</a>
   |
   <a href="https://www.instagram.com/fenixsolucoestecnologicas/" target="_blank" rel="noopener">© Fênix Soluções Tecnológicas</a>
-  · v4.3
+  · v4.4
 </footer>
 
 <script>
@@ -553,13 +572,14 @@ function mostrarGoogle(sim) { $('google-area').hidden = !sim; }
    $('som-chk').addEventListener('change', function () { FenixCore.som.definir(this.checked); });
    // depois do login com sucesso (dentro do clique): FenixCore.som.tocarAbertura(); */
 $('som-chk').addEventListener('change', function () { try { localStorage.setItem('fenix_som', this.checked ? 'on' : 'off'); } catch (e) {} });
+/* Tema, animações e som também ficam na tela Sobre / menu do avatar do app: FenixCore.preferencias.montarTela(container) (regra 60). */
 try { $('som-chk').checked = localStorage.getItem('fenix_som') !== 'off'; } catch (e) {}
 
 function socialLogin(provider) {
   console.log('Login com', provider);
   /* ligar ao Fênix Core (regras 56 e 58):
      var u = await modAuth.entrarComGoogle();
-     if (u && !(await FenixCore.licenca.confirmarAposGoogle(db, modAuth, u, app))) { mostre: "O login com Google é exclusivo da licença definitiva." } */
+     if (u && !(await FenixCore.licenca.confirmarAposGoogle(db, modAuth, u, app))) { showAlert('login-alert', FenixCore.licenca.MENSAGEM_GOOGLE, 'error'); } */
 }
 </script>
 </body>

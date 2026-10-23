@@ -1,6 +1,12 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
+<script>
+/* Preferências do aparelho (regras 59 e 60): aplica tema e animações reduzidas antes de desenhar a tela. */
+(function () { try { var d = document.documentElement;
+  if (localStorage.getItem('fenix_movimento') === 'reduzido') d.classList.add('fenix-sem-movimento');
+  var t = localStorage.getItem('fenix_tema'); if (t === 'escuro' || t === 'claro') d.setAttribute('data-tema', t); } catch (e) {} })();
+</script>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <meta name="theme-color" content="#041273" />
@@ -11,7 +17,7 @@
   <style>
     /* =============================================================
        FÊNIX — TELA DE ONBOARDING (primeiro acesso)
-       Template v4.3 — usa SOMENTE a paleta oficial Fênix.
+       Template v4.4 — usa SOMENTE a paleta oficial Fênix.
        Fonte: do sistema (sem Google Fonts, funciona offline).
     ============================================================= */
     :root {
@@ -118,6 +124,18 @@
     .fenix-footer a:hover { color: var(--fenix-amarelo); }
 
     @media (max-width: 460px) { .ob-body { padding: 1.4rem 1.25rem 1.6rem; } .ob-title { font-size: 1.3rem; } .ob-grid { grid-template-columns: 1fr; } }
+
+    /* ---------- TEMA ESCURO (regra 60): só a paleta Fênix; escolha do usuário ou do sistema ---------- */
+    html[data-tema="escuro"] { --fenix-card:#041273; --fenix-texto:#ffffff; --fenix-input-txt:#ffffff; --fenix-bg:#020733; --ob-border:rgba(255,255,255,.28); --ob-muted:rgba(255,255,255,.72); --ob-track:rgba(255,255,255,.12); }
+    html[data-tema="escuro"] .ob-input::placeholder { color: rgba(255,255,255,.5); }
+    html[data-tema="escuro"] .ob-link { color: var(--fenix-amarelo); }
+    html[data-tema="escuro"] .ob-link:hover { color: var(--fenix-branco); }
+    @media (prefers-color-scheme: dark) {
+      html:not([data-tema="claro"]) { --fenix-card:#041273; --fenix-texto:#ffffff; --fenix-input-txt:#ffffff; --fenix-bg:#020733; --ob-border:rgba(255,255,255,.28); --ob-muted:rgba(255,255,255,.72); --ob-track:rgba(255,255,255,.12); }
+      html:not([data-tema="claro"]) .ob-input::placeholder { color: rgba(255,255,255,.5); }
+      html:not([data-tema="claro"]) .ob-link { color: var(--fenix-amarelo); }
+      html:not([data-tema="claro"]) .ob-link:hover { color: var(--fenix-branco); }
+    }
   </style>
 </head>
 <body>
@@ -207,7 +225,7 @@
   <a href="https://wa.me/5579999680880" target="_blank" rel="noopener">&lt;Cristiano Fênix/&gt;</a>
   |
   <a href="https://www.instagram.com/fenixsolucoestecnologicas/" target="_blank" rel="noopener">© Fênix Soluções Tecnológicas</a>
-  · v4.3
+  · v4.4
 </footer>
 
 <script>

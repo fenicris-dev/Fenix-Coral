@@ -1,6 +1,6 @@
 /**
  * ============================================================================
- * FÊNIX CORE v4.3
+ * FÊNIX CORE v4.4
  *
  * CONVENÇÃO DE NOME (DUAS CÓPIAS A CADA ENTREGA):
  * O endereço oficial é SEMPRE fenix-core.js (sem número de versão no nome nem
@@ -254,6 +254,15 @@
         de abertura "Asas" (Lá, Ré, Lá), sintetizado no navegador, sem arquivo
         de áudio (tocarAbertura, ligado, definir, sintetizar). Só acréscimos;
         nenhuma função foi removida.
+ * v4.4 — NOVO: (1) licenca: validade opcional (campo licencaAte, "AAAA-MM-DD"
+        ou Timestamp), situacao(dados) com tipo definitiva/teste/vencida e dias
+        restantes, e MENSAGEM_GOOGLE (texto único quando o Google é negado).
+        (2) FenixCore.preferencias: som, animações reduzidas e tema claro/escuro/
+        automático (aplicar, montarTela). (3) criarSincronia ganha
+        importarLista(lista): importa registro a registro pelo caminho da
+        sincronia (backup, regra 44). (4) criarConvite aceita o nome da empresa
+        (5º parâmetro), para o convite não depender da leitura de empresas/{id}.
+        Só acréscimos; nenhuma função foi removida.
  * ============================================================================
  */
 
@@ -882,11 +891,11 @@ function criarModuloConvites(db, baseUrl) {
     return Array.from(crypto.getRandomValues(new Uint8Array(16))).map(b => b.toString(16).padStart(2, "0")).join("");
   }
   return {
-    criarConvite(empresaId, criadorUid, criadorEmail, destinatario) {
+    criarConvite(empresaId, criadorUid, criadorEmail, destinatario, nomeEmpresa) {
       const token = gerarToken();
       const convite = {
         empresaId, criadoPorUid: criadorUid, criadoPor: criadorEmail,
-        destinatario: destinatario || null, usado: false, cancelado: false, criadoEm: serverTimestamp()
+        destinatario: destinatario || null, empresaNome: nomeEmpresa || null, usado: false, cancelado: false, criadoEm: serverTimestamp()
       };
       return setDoc(doc(db, "convites", token), convite).then(() => ({ token, link: baseUrl + "?convite=" + token }));
     },
@@ -2440,6 +2449,22 @@ function criarSincronia(db, opcoes) {
       if (o.aoMudar) o.aoMudar(arr, { origem: "local" });
       return enviar().then(() => true);
     },
+    /**
+     * Importa uma lista inteira (backup, regra 44) registro a registro, pelo caminho
+     * da sincronia: grava no aparelho, entra na fila e sobe de uma vez. Devolve a
+     * quantidade importada. Registros sem id são ignorados.
+     */
+    importarLista(lista) {
+      const mapa = new Map();
+      (lista || []).forEach(r => { if (r && r[campoId] != null && r[campoId] !== "") mapa.set(String(r[campoId]), r); });
+      if (!mapa.size) return Promise.resolve(0);
+      const arr = itens().filter(x => !mapa.has(String(x[campoId]))).concat(Array.from(mapa.values()));
+      o.gravarLocal(arr);
+      mapa.forEach((r, id) => { meta[id] = { ts: proximoTs(id), apagado: false }; pend[id] = true; });
+      salvarEstado();
+      if (o.aoMudar) o.aoMudar(arr, { origem: "local" });
+      return enviar().then(() => mapa.size);
+    },
     excluir(id) {
       const arr = itens().filter(x => String(x[campoId]) !== String(id));
       o.gravarLocal(arr);
@@ -2471,10 +2496,37 @@ function criarSincronia(db, opcoes) {
 const _chaveLicenca = (app) => "fenix_licenca_definitiva_" + String(app || "app");
 
 const licenca = {
-  /** true se o objeto da empresa (ou o texto) indica licença definitiva. */
-  ehDefinitiva(dados) {
-    const v = (typeof dados === "string") ? dados : (dados && dados.licenca);
-    return String(v || "").trim().toLowerCase() === "definitiva";
+  /** Texto único para mostrar quando o Google é negado por falta de licença definitiva. */
+  MENSAGEM_GOOGLE: "O login com Google é exclusivo da licença definitiva. Entre com e-mail e senha.",
+  /** Data-limite (Date) de licencaAte: "AAAA-MM-DD" (vale até o fim do dia), Timestamp do Firestore ou Date. */
+  dataLimite(dados) {
+    const v = dados && typeof dados === "object" ? dados.licencaAte : null;
+    if (!v) return null;
+    if (typeof v.toDate === "function") return v.toDate();
+    if (typeof v.seconds === "number") return new Date(v.seconds * 1000);
+    if (v instanceof Date) return v;
+    const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(v));
+    return m ? new Date(+m[1], +m[2] - 1, +m[3], 23, 59, 59) : null;
+  },
+  /**
+   * Situação da licença: { tipo: "definitiva" | "teste" | "vencida", ate: Date|null, dias: número|null }.
+   * "vencida" = tinha prazo (licencaAte) e o prazo passou. `dias` = dias que faltam (0 no último dia).
+   */
+  situacao(dados, agora) {
+    const t = (typeof dados === "string") ? dados : (dados && dados.licenca);
+    const def = String(t || "").trim().toLowerCase() === "definitiva";
+    const ate = licenca.dataLimite(dados);
+    const hoje = agora || new Date();
+    if (ate) {
+      const dias = Math.max(0, Math.floor((ate.getTime() - hoje.getTime()) / 86400000));
+      if (ate.getTime() < hoje.getTime()) return { tipo: "vencida", ate, dias: 0 };
+      return { tipo: def ? "definitiva" : "teste", ate, dias };
+    }
+    return { tipo: def ? "definitiva" : "teste", ate: null, dias: null };
+  },
+  /** true se a licença é definitiva e não está vencida (objeto da empresa, espelho ou texto). */
+  ehDefinitiva(dados, agora) {
+    return licenca.situacao(dados, agora).tipo === "definitiva";
   },
   /** SHA-256 (hex) do e-mail em minúsculas: o ID do espelho licencas/{id}. */
   async hashEmail(email) {
@@ -2594,6 +2646,76 @@ const som = {
 };
 
 // ============================================================================
+// 20. PREFERÊNCIAS DO USUÁRIO: SOM, MOVIMENTO E TEMA (v4.4)
+// ============================================================================
+
+/**
+ * Preferências guardadas neste aparelho (localStorage), valem para todos os
+ * apps do mesmo endereço: som de abertura (FenixCore.som), animações reduzidas
+ * e tema (claro, escuro ou automático). `aplicar()` coloca na página a classe
+ * `fenix-sem-movimento` e o atributo `data-tema` no <html>; os templates de
+ * login e splash já reagem a eles. `montarTela(container, { tema: false })` desenha
+ * os controles prontos (use na tela Sobre ou no menu do avatar, regra 60);
+ * com tema:false o seletor de tema não aparece (app sem o grupo J).
+ */
+const _chaveMov = "fenix_movimento";
+const _chaveTema = "fenix_tema";
+
+const preferencias = {
+  /** true se o usuário pediu animações reduzidas OU se o sistema pede (prefers-reduced-motion). */
+  animacoesReduzidas() {
+    try { if (localStorage.getItem(_chaveMov) === "reduzido") return true; } catch (e) {}
+    try { return !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches); } catch (e) { return false; }
+  },
+  /** Só a escolha do usuário (sem olhar o sistema). */
+  animacoesReduzidasEscolhidas() { try { return localStorage.getItem(_chaveMov) === "reduzido"; } catch (e) { return false; } },
+  definirAnimacoesReduzidas(sim) {
+    try { if (sim) localStorage.setItem(_chaveMov, "reduzido"); else localStorage.removeItem(_chaveMov); } catch (e) {}
+    preferencias.aplicar();
+  },
+  /** "claro", "escuro" ou "auto" (segue o sistema). */
+  tema() { try { const t = localStorage.getItem(_chaveTema); return (t === "claro" || t === "escuro") ? t : "auto"; } catch (e) { return "auto"; } },
+  definirTema(t) {
+    try { if (t === "claro" || t === "escuro") localStorage.setItem(_chaveTema, t); else localStorage.removeItem(_chaveTema); } catch (e) {}
+    preferencias.aplicar();
+  },
+  /** Aplica as preferências na página (idempotente). */
+  aplicar() {
+    if (typeof document === "undefined" || !document.documentElement) return;
+    const h = document.documentElement;
+    h.classList.toggle("fenix-sem-movimento", preferencias.animacoesReduzidasEscolhidas());
+    const t = preferencias.tema();
+    if (t === "auto") h.removeAttribute("data-tema"); else h.setAttribute("data-tema", t);
+  },
+  /** Desenha os controles Som de abertura, Reduzir animações e Tema dentro do container. */
+  montarTela(container, opcoes) {
+    const op = opcoes || {};
+    const alvo = (typeof container === "string") ? document.querySelector(container) : container;
+    if (!alvo) throw new Error("preferencias.montarTela: container não encontrado.");
+    alvo.innerHTML = "";
+    const caixa = document.createElement("div");
+    caixa.style.cssText = "display:flex;flex-direction:column;gap:6px";
+    const linha = (rotulo, el) => {
+      const l = document.createElement("label");
+      l.style.cssText = "display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:44px;font-size:.95rem";
+      const s = document.createElement("span"); s.textContent = rotulo; l.appendChild(s); l.appendChild(el); caixa.appendChild(l);
+    };
+    const chk = (marcado, aoMudar) => { const i = document.createElement("input"); i.type = "checkbox"; i.checked = marcado; i.style.cssText = "width:20px;height:20px"; i.addEventListener("change", () => aoMudar(i.checked)); return i; };
+    linha("Som de abertura", chk(som.ligado(), (v) => som.definir(v)));
+    linha("Reduzir animações", chk(preferencias.animacoesReduzidasEscolhidas(), (v) => preferencias.definirAnimacoesReduzidas(v)));
+    if (op.tema !== false) {   // opcoes.tema = false esconde o seletor (app sem o grupo J, tema escuro)
+      const sel = document.createElement("select"); sel.style.cssText = "min-height:44px;font-size:.95rem";
+      [["auto", "Automático"], ["claro", "Claro"], ["escuro", "Escuro"]].forEach((o) => { const opt = document.createElement("option"); opt.value = o[0]; opt.textContent = o[1]; sel.appendChild(opt); });
+      sel.value = preferencias.tema(); sel.addEventListener("change", () => preferencias.definirTema(sel.value));
+      linha("Tema", sel);
+    }
+    alvo.appendChild(caixa);
+    return caixa;
+  }
+};
+if (typeof document !== "undefined") { try { preferencias.aplicar(); } catch (e) {} }
+
+// ============================================================================
 // EXPORTAÇÃO
 // ============================================================================
 
@@ -2614,6 +2736,7 @@ export const FenixCore = {
   criarSincronia,
   licenca,
   som,
+  preferencias,
   pessoas,
   produtos,
   localidades,
