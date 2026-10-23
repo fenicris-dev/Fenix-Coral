@@ -1,6 +1,6 @@
 /**
  * ============================================================================
- * FÊNIX CORE v4.1
+ * FÊNIX CORE v4.3
  *
  * CONVENÇÃO DE NOME (DUAS CÓPIAS A CADA ENTREGA):
  * O endereço oficial é SEMPRE fenix-core.js (sem número de versão no nome nem
@@ -239,6 +239,21 @@
         depois das três letras (ABC-1D23 Mercosul e ABC-1234 antiga); RG no
         formato 00.000.000-0 (o último caractere pode ser X). valorLimpo("rg")
         devolve só números e X.
+ * v4.2 — NOVO: (1) criarModuloAuth ganha entrarComGoogle(), resultadoRedirecionamento()
+        e redefinirSenha(email). (2) criarModuloDadosPessoais(db, uid, nomeApp):
+        dados do usuário sem empresa em dados_pessoais/{uid}/{nomeApp}/{chave}
+        (salvar, carregar, excluir, listar, escutar, escutarTudo). (3)
+        criarSincronia(db, opcoes): sincroniza uma tabela entre aparelhos em
+        tempo real, com fila offline, exclusão e conflito por última alteração,
+        no escopo pessoal ou de empresa. (4) criarModuloAppData ganha escutar().
+        Só acréscimos; nenhuma função foi removida.
+ * v4.3 — NOVO: (1) FenixCore.licenca: licença definitiva de uso (campo
+        licenca = "definitiva" em empresas/{id}); o botão Entrar com Google só
+        aparece com ela (ehDefinitiva, daEmpresa, porEmail, hashEmail, lembrar,
+        lembrada, liberaGoogle, confirmarAposGoogle). (2) FenixCore.som: toque
+        de abertura "Asas" (Lá, Ré, Lá), sintetizado no navegador, sem arquivo
+        de áudio (tocarAbertura, ligado, definir, sintetizar). Só acréscimos;
+        nenhuma função foi removida.
  * ============================================================================
  */
 
@@ -246,11 +261,12 @@ import { initializeApp, getApps, getApp } from "https://www.gstatic.com/firebase
 import {
   getFirestore, doc, getDoc, setDoc, updateDoc, deleteDoc,
   collection, getDocs, query, where, orderBy, limit as fsLimit,
-  serverTimestamp
+  serverTimestamp, onSnapshot
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import {
   getAuth, onAuthStateChanged, signInWithEmailAndPassword,
-  createUserWithEmailAndPassword, signOut
+  createUserWithEmailAndPassword, signOut,
+  GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult, sendPasswordResetEmail
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 
 // ============================================================================
@@ -788,6 +804,33 @@ function criarModuloAuth(app) {
     sair() {
       return signOut(auth);
     },
+    /**
+     * Entrar com Google. Abre a janela do Google; se o navegador bloquear a
+     * janela (comum em PWA no celular), cai sozinho para o redirecionamento e
+     * devolve null: ao voltar, chame resultadoRedirecionamento(). Para forçar
+     * o redirecionamento: entrarComGoogle({ redirecionar: true }).
+     * O endereço do app (ex.: fenicris-dev.github.io) precisa estar em
+     * Firebase > Authentication > Configurações > Domínios autorizados.
+     */
+    entrarComGoogle(opcoes) {
+      const provedor = new GoogleAuthProvider();
+      provedor.setCustomParameters({ prompt: "select_account" });
+      if (opcoes && opcoes.redirecionar) return signInWithRedirect(auth, provedor).then(() => null);
+      return signInWithPopup(auth, provedor).then(cred => cred.user).catch(e => {
+        if (e && (e.code === "auth/popup-blocked" || e.code === "auth/operation-not-supported-in-this-environment")) {
+          return signInWithRedirect(auth, provedor).then(() => null);
+        }
+        throw e;
+      });
+    },
+    /** Chame ao abrir o app: devolve o usuário se ele acabou de voltar do redirecionamento do Google, ou null. */
+    resultadoRedirecionamento() {
+      return getRedirectResult(auth).then(cred => (cred ? cred.user : null));
+    },
+    /** Envia o e-mail de redefinição de senha. */
+    redefinirSenha(email) {
+      return sendPasswordResetEmail(auth, email).then(() => true);
+    },
     usuarioAtual() {
       return auth.currentUser;
     }
@@ -911,6 +954,11 @@ function criarModuloAppData(db, empresaId, nomeApp) {
     carregar(chave) {
       return getDoc(doc(db, "empresas", empresaId, "appData", nomeApp + "_" + chave))
         .then(snap => snap.exists() ? (snap.data().dados || []) : null);
+    },
+    /** Tempo real: chama aoMudar(dados) a cada alteração (de qualquer aparelho). Devolve a função que para de escutar. */
+    escutar(chave, aoMudar, aoErro) {
+      return onSnapshot(doc(db, "empresas", empresaId, "appData", nomeApp + "_" + chave),
+        snap => aoMudar(snap.exists() ? (snap.data().dados || []) : null), aoErro || function () {});
     }
   };
 }
@@ -2211,6 +2259,341 @@ function _normalizarTipoMascara(t) {
 }
 
 // ============================================================================
+// 12. DADOS PESSOAIS E SINCRONIA ENTRE APARELHOS (v4.2)
+// ============================================================================
+/**
+ * DADOS PESSOAIS (app sem empresa: o dado é do usuário).
+ * Grava em dados_pessoais/{uid}/{nomeApp}/{chave} (caminho que as regras do
+ * Firestore já liberam só para o dono do uid). Um documento por chave.
+ *
+ *   const dp = FenixCore.criarModuloDadosPessoais(db, uid, "fenix-gestor-do-tempo");
+ *   await dp.salvar("config", { tema: "claro" });
+ *   const cfg = await dp.carregar("config");
+ *   const parar = dp.escutar("config", dados => { ... });   // tempo real
+ */
+function criarModuloDadosPessoais(db, uid, nomeApp) {
+  if (!uid) throw new Error("criarModuloDadosPessoais: falta o uid do usuário logado.");
+  if (!nomeApp) throw new Error("criarModuloDadosPessoais: falta o nome do app.");
+  const ref = chave => doc(db, "dados_pessoais", uid, nomeApp, String(chave));
+  return {
+    salvar(chave, dados) {
+      return setDoc(ref(chave), { dados: _limparParaFirestore(dados), ts: Date.now(), atualizadoEm: serverTimestamp() }).then(() => true);
+    },
+    carregar(chave) {
+      return getDoc(ref(chave)).then(snap => snap.exists() ? snap.data().dados : null);
+    },
+    excluir(chave) {
+      return deleteDoc(ref(chave)).then(() => true);
+    },
+    listar() {
+      return getDocs(collection(db, "dados_pessoais", uid, nomeApp))
+        .then(snap => snap.docs.map(d => ({ chave: d.id, dados: d.data().dados, ts: d.data().ts })));
+    },
+    /** Tempo real de uma chave. Devolve a função que para de escutar. */
+    escutar(chave, aoMudar, aoErro) {
+      return onSnapshot(ref(chave), snap => aoMudar(snap.exists() ? snap.data().dados : null), aoErro || function () {});
+    },
+    /** Tempo real de todas as chaves do app. */
+    escutarTudo(aoMudar, aoErro) {
+      return onSnapshot(collection(db, "dados_pessoais", uid, nomeApp),
+        snap => aoMudar(snap.docs.map(d => ({ chave: d.id, dados: d.data().dados, ts: d.data().ts }))), aoErro || function () {});
+    }
+  };
+}
+
+function _limparParaFirestore(v) {
+  return v === undefined ? null : JSON.parse(JSON.stringify(v));
+}
+
+/**
+ * SINCRONIA DE UMA TABELA entre aparelhos, em tempo real e com offline.
+ * O app continua guardando a lista no aparelho (localStorage) e passa a
+ * chamar sync.salvar / sync.excluir em vez de mexer na lista direto.
+ *
+ *   const sync = FenixCore.criarSincronia(db, {
+ *     escopo: "pessoal",              // "pessoal" (por usuário) ou "empresa"
+ *     uid: user.uid,                  // escopo pessoal
+ *     // empresaId: "abc123",         // escopo empresa
+ *     nomeApp: "fenix-gestor-do-tempo",
+ *     tabela: "tarefas",
+ *     lerLocal:   () => JSON.parse(localStorage.getItem("tarefas") || "[]"),
+ *     gravarLocal: arr => localStorage.setItem("tarefas", JSON.stringify(arr)),
+ *     aoMudar:    (arr, info) => desenharTela(arr),   // info.origem: "local" | "nuvem"
+ *     aoMudarEstado: est => mostrarIndicador(est)     // "sincronizado" | "sincronizando" | "offline" | "erro"
+ *   });
+ *   sync.iniciar();
+ *   sync.salvar({ id: "t1", titulo: "Ligar para o cliente" });
+ *   sync.excluir("t1");
+ *
+ * Como funciona: cada registro vira um documento (tabela__id) com a hora da
+ * última alteração. Em conflito vale a alteração mais recente (por registro).
+ * Exclusão grava uma marca de "apagado" para valer nos outros aparelhos.
+ * Sem internet, as alterações ficam numa fila no aparelho e sobem sozinhas ao
+ * reconectar (evento online e nova tentativa a cada 5 minutos, regra 3).
+ * Primeiro uso: o que só existe no aparelho sobe; se o mesmo id já existir na
+ * nuvem, vale a nuvem. Limite: usa o relógio do aparelho (aparelhos com a hora
+ * muito errada podem "ganhar" conflitos).
+ */
+function criarSincronia(db, opcoes) {
+  const o = opcoes || {};
+  const campoId = o.campoId || "id";
+  if (!o.nomeApp || !o.tabela) throw new Error("criarSincronia: faltam nomeApp e tabela.");
+  if (typeof o.lerLocal !== "function" || typeof o.gravarLocal !== "function") throw new Error("criarSincronia: faltam lerLocal e gravarLocal.");
+  let colecao;
+  if (o.escopo === "empresa") {
+    if (!o.empresaId) throw new Error("criarSincronia: escopo empresa pede empresaId.");
+    colecao = ["empresas", o.empresaId, o.nomeApp + "_sync"];
+  } else {
+    if (!o.uid) throw new Error("criarSincronia: escopo pessoal pede uid.");
+    colecao = ["dados_pessoais", o.uid, o.nomeApp];
+  }
+  const chaveLocal = "fenix-sync:" + colecao.join("/") + ":" + o.tabela + (o.sufixoLocal || "");
+  const online = o.estaOnline || (() => typeof navigator === "undefined" || navigator.onLine !== false);
+  const memoria = {};
+  const ler = (k, padrao) => { try { const t = localStorage.getItem(k); return t ? JSON.parse(t) : padrao; } catch (e) { return memoria[k] || padrao; } };
+  const gravar = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { memoria[k] = v; } };
+  let meta = ler(chaveLocal + ":meta", {});   // { id: { ts, apagado } }
+  let pend = ler(chaveLocal + ":pend", {});   // { id: true }
+  let estado = "sincronizado", cancelar = null, timer = null, enviando = false, primeira = true, ligado = false;
+  const docRef = id => doc(db, ...colecao, o.tabela + "__" + id);
+  const mudarEstado = e => { if (e !== estado) { estado = e; if (o.aoMudarEstado) o.aoMudarEstado(e); } };
+  const salvarEstado = () => { gravar(chaveLocal + ":meta", meta); gravar(chaveLocal + ":pend", pend); };
+  const itens = () => { const a = o.lerLocal(); return Array.isArray(a) ? a : []; };
+  const proximoTs = id => Math.max(Date.now(), ((meta[id] && meta[id].ts) || 0) + 1);
+
+  async function enviar() {
+    if (enviando) return;
+    const ids = Object.keys(pend);
+    if (!ids.length) { if (online()) mudarEstado("sincronizado"); else mudarEstado("offline"); return; }
+    if (!online()) { mudarEstado("offline"); return; }
+    enviando = true; mudarEstado("sincronizando");
+    try {
+      for (const id of ids) {
+        const m = meta[id] || { ts: Date.now() };
+        const reg = itens().find(x => String(x[campoId]) === String(id));
+        if (!m.apagado && !reg) { delete pend[id]; continue; }
+        await setDoc(docRef(id), {
+          tabela: o.tabela, id: String(id), dados: m.apagado ? null : _limparParaFirestore(reg),
+          ts: m.ts, apagado: !!m.apagado, atualizadoEm: serverTimestamp()
+        });
+        delete pend[id]; salvarEstado();
+      }
+      mudarEstado("sincronizado");
+    } catch (e) {
+      mudarEstado(online() ? "erro" : "offline");
+    } finally { enviando = false; }
+  }
+
+  function aplicarNuvem(docs) {
+    let arr = itens(), mudou = false;
+    const vistos = {};
+    docs.forEach(d => {
+      const r = d.data();
+      if (!r || r.tabela !== o.tabela) return;
+      const id = String(r.id); vistos[id] = true;
+      const m = meta[id];
+      if (!m || r.ts > m.ts) {
+        arr = arr.filter(x => String(x[campoId]) !== id);
+        if (!r.apagado && r.dados) arr.push(r.dados);
+        meta[id] = { ts: r.ts, apagado: !!r.apagado }; delete pend[id]; mudou = true;
+      } else if (r.ts < m.ts) { pend[id] = true; }
+    });
+    if (primeira) {
+      primeira = false;
+      itens().forEach(x => { const id = String(x[campoId]); if (!vistos[id] && !(meta[id] && meta[id].apagado)) { if (!meta[id]) meta[id] = { ts: Date.now() }; pend[id] = true; } });
+    }
+    salvarEstado();
+    if (mudou) { o.gravarLocal(arr); if (o.aoMudar) o.aoMudar(arr, { origem: "nuvem" }); }
+    return enviar();
+  }
+
+  function assinar() {
+    if (cancelar || !ligado) return;
+    if (!online()) { mudarEstado("offline"); return; }
+    mudarEstado("sincronizando");
+    cancelar = onSnapshot(query(collection(db, ...colecao), where("tabela", "==", o.tabela)),
+      snap => { aplicarNuvem(snap.docs); },
+      () => { cancelar = null; mudarEstado(online() ? "erro" : "offline"); });
+  }
+
+  const aoVoltar = () => { assinar(); enviar(); };
+  return {
+    iniciar() {
+      if (ligado) return;
+      ligado = true;
+      if (typeof window !== "undefined" && window.addEventListener) window.addEventListener("online", aoVoltar);
+      timer = setInterval(aoVoltar, 5 * 60 * 1000);
+      assinar(); enviar();
+    },
+    parar() {
+      ligado = false;
+      if (cancelar) { cancelar(); cancelar = null; }
+      if (timer) { clearInterval(timer); timer = null; }
+      if (typeof window !== "undefined" && window.removeEventListener) window.removeEventListener("online", aoVoltar);
+    },
+    salvar(reg) {
+      const id = reg && reg[campoId];
+      if (id == null || id === "") return Promise.reject(new Error("criarSincronia.salvar: o registro precisa do campo '" + campoId + "'."));
+      const arr = itens().filter(x => String(x[campoId]) !== String(id)); arr.push(reg);
+      o.gravarLocal(arr);
+      meta[String(id)] = { ts: proximoTs(String(id)), apagado: false }; pend[String(id)] = true; salvarEstado();
+      if (o.aoMudar) o.aoMudar(arr, { origem: "local" });
+      return enviar().then(() => true);
+    },
+    excluir(id) {
+      const arr = itens().filter(x => String(x[campoId]) !== String(id));
+      o.gravarLocal(arr);
+      meta[String(id)] = { ts: proximoTs(String(id)), apagado: true }; pend[String(id)] = true; salvarEstado();
+      if (o.aoMudar) o.aoMudar(arr, { origem: "local" });
+      return enviar().then(() => true);
+    },
+    /** Tenta enviar a fila e reconectar agora (ex.: botão "Sincronizar"). */
+    forcarSincronia() { assinar(); return enviar(); },
+    estado() { return estado; },
+    pendentes() { return Object.keys(pend).length; }
+  };
+}
+
+// ============================================================================
+// 19. LICENÇA DEFINITIVA E TOQUE DE ABERTURA (v4.3)
+// ============================================================================
+
+/**
+ * Licença definitiva de uso (regra 58 do Livro).
+ *  - Verdade: campo `licenca` do documento empresas/{empresaId}. "definitiva"
+ *    = licença definitiva; qualquer outro valor, ou sem o campo = teste.
+ *    Só é gravado pelo console do Firebase (as regras do Firestore recusam
+ *    que o app grave esse campo).
+ *  - Antes do login o app não sabe quem é o usuário. Por isso existe o espelho
+ *    licencas/{SHA-256 do e-mail} = { licenca: "definitiva" }, de leitura
+ *    pontual (get) liberada, e a lembrança no aparelho (localStorage).
+ */
+const _chaveLicenca = (app) => "fenix_licenca_definitiva_" + String(app || "app");
+
+const licenca = {
+  /** true se o objeto da empresa (ou o texto) indica licença definitiva. */
+  ehDefinitiva(dados) {
+    const v = (typeof dados === "string") ? dados : (dados && dados.licenca);
+    return String(v || "").trim().toLowerCase() === "definitiva";
+  },
+  /** SHA-256 (hex) do e-mail em minúsculas: o ID do espelho licencas/{id}. */
+  async hashEmail(email) {
+    const txt = String(email || "").trim().toLowerCase();
+    const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(txt));
+    return Array.from(new Uint8Array(buf)).map((b) => b.toString(16).padStart(2, "0")).join("");
+  },
+  /** Lê empresas/{empresaId} e diz se a licença é definitiva (exige login). */
+  async daEmpresa(db, empresaId) {
+    if (!db || !empresaId) return false;
+    const snap = await getDoc(doc(db, "empresas", empresaId));
+    return snap.exists() && licenca.ehDefinitiva(snap.data());
+  },
+  /** Consulta o espelho licencas/{hash do e-mail} (funciona antes do login). */
+  async porEmail(db, email) {
+    if (!db || !email) return false;
+    const snap = await getDoc(doc(db, "licencas", await licenca.hashEmail(email)));
+    return snap.exists() && licenca.ehDefinitiva(snap.data());
+  },
+  /** Guarda neste aparelho se a licença é definitiva (por app). */
+  lembrar(app, sim) {
+    try { if (sim) localStorage.setItem(_chaveLicenca(app), "1"); else localStorage.removeItem(_chaveLicenca(app)); } catch (e) {}
+  },
+  lembrada(app) {
+    try { return localStorage.getItem(_chaveLicenca(app)) === "1"; } catch (e) { return false; }
+  },
+  /**
+   * Decide se o botão Entrar com Google deve aparecer.
+   * opcoes: { app, email?, empresaId? }. Sem rede ou com erro, vale o que o
+   * aparelho lembra. Sempre devolve true ou false, nunca lança erro.
+   */
+  async liberaGoogle(db, opcoes) {
+    const o = opcoes || {};
+    try {
+      let r = null;
+      if (o.empresaId) r = await licenca.daEmpresa(db, o.empresaId);
+      else if (o.email) { if (await licenca.porEmail(db, o.email)) r = true; }
+      if (r === true) { licenca.lembrar(o.app, true); return true; }
+      if (r === false && o.empresaId) { licenca.lembrar(o.app, false); return false; }
+    } catch (e) { /* offline ou sem permissão: vale a lembrança do aparelho */ }
+    return licenca.lembrada(o.app);
+  },
+  /**
+   * Chame logo depois de entrarComGoogle(): confirma a licença do usuário
+   * (pelo vínculo com a empresa ou pelo espelho do e-mail). Se não for
+   * definitiva, sai da conta e devolve false. `modAuth` é o criarModuloAuth(app).
+   */
+  async confirmarAposGoogle(db, modAuth, usuario, app) {
+    let ok = false;
+    try {
+      const v = await getDoc(doc(db, "usuarios_empresa", usuario.uid));
+      if (v.exists() && v.data().empresaId) ok = await licenca.daEmpresa(db, v.data().empresaId);
+      if (!ok && usuario.email) ok = await licenca.porEmail(db, usuario.email);
+    } catch (e) { ok = false; }
+    licenca.lembrar(app, ok);
+    if (!ok) { try { await modAuth.sair(); } catch (e) {} }
+    return ok;
+  }
+};
+
+/**
+ * Toque de abertura "Asas": três notas, Lá (440 Hz), Ré (587,33 Hz) e Lá
+ * (880 Hz), duas curtas e uma longa, no ritmo de Fê-ni-x. Sintetizado pelo
+ * navegador (Web Audio), sem arquivo de áudio. Navegadores só tocam som depois
+ * de um toque do usuário: com somentePermitido, o toque só sai se o navegador
+ * já permitir; sem ele, use dentro de um clique (ex.: login que deu certo).
+ */
+const _SOM_NOTAS = [[440, 0, 0.28], [587.33, 0.2, 0.28], [880, 0.4, 1.0]];
+const _chaveSom = "fenix_som";
+const _chaveSomSessao = "fenix_toque_tocado";
+
+const som = {
+  /** Som ligado? (padrão: sim). */
+  ligado() { try { return localStorage.getItem(_chaveSom) !== "off"; } catch (e) { return true; } },
+  /** Liga ou desliga o som neste aparelho. */
+  definir(sim) { try { localStorage.setItem(_chaveSom, sim ? "on" : "off"); } catch (e) {} },
+  /** Escreve as três notas em um AudioContext (também serve para testes offline). */
+  sintetizar(c, inicio) {
+    const t0 = (inicio === undefined ? c.currentTime : inicio) + 0.05;
+    const saida = c.createGain(); saida.gain.value = 0.32;
+    const eco = c.createDelay(); eco.delayTime.value = 0.17;
+    const fb = c.createGain(); fb.gain.value = 0.28; eco.connect(fb); fb.connect(eco);
+    const molhado = c.createGain(); molhado.gain.value = 0.22;
+    saida.connect(c.destination); saida.connect(eco); eco.connect(molhado); molhado.connect(c.destination);
+    _SOM_NOTAS.forEach((n) => {
+      const f = n[0], ini = t0 + n[1], dur = n[2];
+      const g = c.createGain(); g.gain.setValueAtTime(0.0001, ini);
+      g.gain.exponentialRampToValueAtTime(1, ini + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001, ini + dur);
+      const o1 = c.createOscillator(); o1.type = "triangle"; o1.frequency.value = f;
+      const o2 = c.createOscillator(); o2.type = "sine"; o2.frequency.value = f * 2;
+      const g2 = c.createGain(); g2.gain.value = 0.22;
+      o1.connect(g); o2.connect(g2); g2.connect(g); g.connect(saida);
+      o1.start(ini); o2.start(ini); o1.stop(ini + dur + 0.05); o2.stop(ini + dur + 0.05);
+    });
+  },
+  /**
+   * Toca o toque de abertura. opcoes: { somentePermitido, forcar }.
+   * Toca no máximo uma vez por sessão (a menos que forcar). Devolve true se tocou.
+   */
+  async tocarAbertura(opcoes) {
+    const o = opcoes || {};
+    try {
+      if (!som.ligado()) return false;
+      if (!o.forcar && sessionStorage.getItem(_chaveSomSessao) === "1") return false;
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) return false;
+      const c = new AC();
+      if (o.somentePermitido && c.state !== "running") { try { c.close(); } catch (e) {} return false; }
+      if (c.state === "suspended" && c.resume) { try { await c.resume(); } catch (e) {} }
+      som.sintetizar(c);
+      try { sessionStorage.setItem(_chaveSomSessao, "1"); } catch (e) {}
+      setTimeout(() => { try { c.close(); } catch (e) {} }, 2500);
+      return true;
+    } catch (e) { return false; }
+  }
+};
+
+// ============================================================================
 // EXPORTAÇÃO
 // ============================================================================
 
@@ -2227,6 +2610,10 @@ export const FenixCore = {
   criarModuloFamiliasMateriais,
   criarModuloCatalogoEmpresa,
   criarModuloPessoas,
+  criarModuloDadosPessoais,
+  criarSincronia,
+  licenca,
+  som,
   pessoas,
   produtos,
   localidades,

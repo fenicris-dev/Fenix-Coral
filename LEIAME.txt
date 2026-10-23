@@ -1,13 +1,23 @@
-Biblioteca Fênix v4.1
+Biblioteca Fênix v4.3
 
-Raiz do repositório: index.html (Painel), fenix-core.js, fenix-template-login.html, fenix-template-onboarding.html, firestore.rules
+Raiz do repositório: index.html (Painel), fenix-core.js, fenix-template-login.html, fenix-template-onboarding.html, fenix-template-splash.html (NOVO), firestore.rules
 Icon/   : Fenix_Icone_128.png (os demais ícones já estão no repositório)
 Termos/ : fenix-termos-de-uso.html, fenix-politica-de-privacidade.html
 MD/     : fenix-livro-das-regras.md, fenix-guia-da-biblioteca.md (guia e changelog da biblioteca)
 DOC/    : fenix-livro-das-regras.docx, fenix-guia-da-biblioteca.docx
 versoes/: cópias com a versão no nome, só para controle interno (nenhum app aponta para elas). Não suba esta pasta para a raiz do repositório.
 
-Novo na v4.1: placa sempre com hífen (ABC-1D23, ABC-1234) e RG no formato 00.000.000-0.
+Novo na v4.3:
+- Login com Google só para quem tem a licença definitiva de uso (regra 58): o botão do template começa escondido.
+- Farol alto passando ao fundo do login e holofotes duplos de baixo para cima no splash (regra 59); novo fenix-template-splash.html.
+- Toque de abertura "Asas" (Lá, Ré, Lá), sintetizado no navegador, com a chave Som no login.
+- Core: FenixCore.licenca e FenixCore.som (seção 2.15 do guia).
+- firestore.rules: a empresa não pode ser criada como definitiva; nova coleção licencas (leitura pontual, gravação só pelo console).
 
-Depois de publicar, abra https://fenicris-dev.github.io/Fenix-Core/, toque em "Testar tudo", em "Rodar testes ao vivo" e digite nos campos de "Testar máscaras".
-O firestore.rules só vale depois de colado no console do Firebase (ordem e roteiro de teste no guia): subir o arquivo no GitHub não altera o banco.
+Como dar a licença definitiva (no console do Firebase, Firestore):
+1) No documento empresas/{id}, crie o campo licenca (texto) = definitiva.
+2) Para cada e-mail que vai usar o Google, crie o documento licencas/ID com o campo licenca = definitiva. O ID é gerado no Painel: abra "Licença definitiva e toque (manual)", digite o e-mail e copie o ID.
+
+Ordem para publicar: 1) core e templates no GitHub; 2) depois cole o firestore.rules no console do Firebase (guarde uma cópia das regras antigas e teste no Playground, roteiro no guia).
+Depois de publicar, abra https://fenicris-dev.github.io/Fenix-Core/ e toque em "Testar tudo" e em "Rodar testes ao vivo".
+Antes do login com Google: ative o Google em Authentication > Método de login e inclua fenicris-dev.github.io em Domínios autorizados.

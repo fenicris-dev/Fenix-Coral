@@ -10,7 +10,7 @@
   <style>
     /* =============================================================
        FÊNIX — MÓDULO DE ACESSO (login / cadastro / recuperar senha)
-       Template v4.1 — usa SOMENTE a paleta oficial Fênix.
+       Template v4.3 — usa SOMENTE a paleta oficial Fênix.
        Fonte: do sistema (sem Google Fonts, funciona offline).
     ============================================================= */
     :root {
@@ -39,9 +39,13 @@
 
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     html { height: 100%; }
+    [hidden] { display: none !important; }
     body {
       font-family: var(--auth-font);
-      background: var(--fenix-bg);
+      background: var(--fenix-degrade);
+      background-attachment: fixed;
+      position: relative;
+      overflow-x: hidden;
       color: var(--fenix-texto);
       min-height: 100%;
       display: flex;
@@ -49,7 +53,9 @@
       padding-top: env(safe-area-inset-top, 0px);
     }
     main {
+      position: relative; z-index: 1;
       flex: 1;
+      flex-direction: column;
       display: flex;
       align-items: center;
       justify-content: center;
@@ -186,6 +192,7 @@
 
     /* ---------- RODAPÉ PADRÃO FÊNIX ---------- */
     .fenix-footer {
+      position: relative; z-index: 1;
       background: linear-gradient(90deg, #040798, #0076CE);
       color: var(--fenix-branco);
       text-align: center; font-size: .8rem; padding: .85rem 1rem;
@@ -198,9 +205,37 @@
       .auth-body { padding: 1.5rem 1.25rem; }
       .auth-title { font-size: 1.3rem; }
     }
+
+    /* ---------- FAROL (regra 59): um veículo de farol alto passando ao fundo ----------
+       Só CSS, só cores da paleta. Fica atrás do card (z-index 0) e não recebe toques. */
+    .fenix-farol { position: fixed; left: 0; top: 58%; width: 0; height: 0; pointer-events: none; z-index: 0;
+      will-change: transform, opacity; animation: fenix-farol-passa 9s cubic-bezier(.45,.05,.35,1) infinite; }
+    .fenix-farol-feixe { position: absolute; left: 0; top: -16vmax; width: 78vmax; height: 32vmax;
+      background: radial-gradient(ellipse at 0% 50%, rgba(255,255,255,.62) 0%, rgba(255,247,220,.30) 16%, rgba(255,203,0,.09) 40%, rgba(255,255,255,0) 68%);
+      clip-path: polygon(0 46%, 100% 0, 100% 100%, 0 54%); }
+    .fenix-farol-lampada { position: absolute; left: -14px; top: -14px; width: 28px; height: 28px; border-radius: 50%;
+      background: radial-gradient(circle, #fff 0%, rgba(255,255,255,.9) 25%, rgba(255,247,220,.35) 55%, rgba(255,255,255,0) 72%); }
+    .fenix-farol-brilho { position: absolute; left: -90px; top: -2px; width: 180px; height: 4px; border-radius: 4px;
+      background: linear-gradient(90deg, rgba(255,255,255,0), rgba(255,255,255,.75), rgba(255,255,255,0)); }
+    @keyframes fenix-farol-passa {
+      0%   { transform: translateX(-85vmax); opacity: 0; }
+      10%  { opacity: 1; }
+      62%  { opacity: 1; }
+      72%  { transform: translateX(112vw); opacity: 0; }
+      100% { transform: translateX(112vw); opacity: 0; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .fenix-farol { animation: none; opacity: .5; transform: translateX(24vw); }
+    }
+    .auth-som { display: flex; align-items: center; justify-content: center; gap: .5rem; min-height: 44px;
+      margin-top: .6rem; color: var(--fenix-branco); font-size: .82rem; cursor: pointer; }
+    .auth-som input { width: 18px; height: 18px; accent-color: var(--fenix-amarelo); }
   </style>
 </head>
 <body>
+
+<!-- FAROL DE FUNDO (regra 59) -->
+<div class="fenix-farol" aria-hidden="true"><div class="fenix-farol-feixe"></div><div class="fenix-farol-brilho"></div><div class="fenix-farol-lampada"></div></div>
 
 <main>
 <div class="auth-card" id="authCard" role="main" aria-label="Autenticação">
@@ -255,6 +290,9 @@
       <span class="auth-btn-text">Entrar</span>
     </button>
 
+    <!-- Google só para quem tem a licença definitiva de uso (regras 56 e 58): começa escondido.
+         Mostre com mostrarGoogle(true) quando FenixCore.licenca.liberaGoogle(db, { app, email }) devolver true. -->
+    <div id="google-area" hidden>
     <div class="auth-divider">ou continue com</div>
 
     <div class="auth-socials">
@@ -264,6 +302,7 @@
       </button>
       <!-- Padrão Fênix: apenas Google como login social -->
     </div>
+    </div><!-- /google-area -->
   </form>
 
   <!-- ========== FORM: CADASTRO ========== -->
@@ -355,6 +394,7 @@
 
   </div><!-- /auth-body -->
 </div>
+<label class="auth-som"><input type="checkbox" id="som-chk" checked> Som de abertura</label>
 </main>
 
 <!-- RODAPÉ PADRÃO FÊNIX -->
@@ -363,7 +403,7 @@
   <a href="https://wa.me/5579999680880" target="_blank" rel="noopener">&lt;Cristiano Fênix/&gt;</a>
   |
   <a href="https://www.instagram.com/fenixsolucoestecnologicas/" target="_blank" rel="noopener">© Fênix Soluções Tecnológicas</a>
-  · v4.1
+  · v4.3
 </footer>
 
 <script>
@@ -496,13 +536,30 @@ $('form-forgot').addEventListener('submit', async function (e) {
   await fakeRequest(1200);
   setLoading('forgot-btn', false);
 
-  /* ── substituir pelo envio real de redefinição (Fênix Core / Firebase Auth) ── */
+  /* ── FenixCore.criarModuloAuth(app).redefinirSenha(email) (regra 56) ── */
   showAlert('forgot-alert', 'Link enviado! Verifique sua caixa de entrada.', 'success');
 });
 
+/* Licença definitiva (regra 58): o botão do Google começa escondido. */
+function mostrarGoogle(sim) { $('google-area').hidden = !sim; }
+/* Ao abrir, mostre se o aparelho já lembra a licença; ao sair do campo e-mail, consulte o espelho:
+   mostrarGoogle(FenixCore.licenca.lembrada(app));
+   $('login-email').addEventListener('blur', async function () {
+     mostrarGoogle(await FenixCore.licenca.liberaGoogle(db, { app: app, email: this.value }));
+   }); */
+
+/* Toque de abertura (regra 59): a chave Som liga e desliga; toque só depois do login dar certo.
+   $('som-chk').checked = FenixCore.som.ligado();
+   $('som-chk').addEventListener('change', function () { FenixCore.som.definir(this.checked); });
+   // depois do login com sucesso (dentro do clique): FenixCore.som.tocarAbertura(); */
+$('som-chk').addEventListener('change', function () { try { localStorage.setItem('fenix_som', this.checked ? 'on' : 'off'); } catch (e) {} });
+try { $('som-chk').checked = localStorage.getItem('fenix_som') !== 'off'; } catch (e) {}
+
 function socialLogin(provider) {
   console.log('Login com', provider);
-  /* substituir pelo login social real (Google) */
+  /* ligar ao Fênix Core (regras 56 e 58):
+     var u = await modAuth.entrarComGoogle();
+     if (u && !(await FenixCore.licenca.confirmarAposGoogle(db, modAuth, u, app))) { mostre: "O login com Google é exclusivo da licença definitiva." } */
 }
 </script>
 </body>

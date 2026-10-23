@@ -1,5 +1,5 @@
 // ============================================================================
-// FÊNIX | firestore.rules (Biblioteca Fênix v4.1)
+// FÊNIX | firestore.rules (Biblioteca Fênix v4.3)
 //
 // BASE: as regras publicadas no console do Firebase (projeto fenix-core), nas
 // versões registradas abaixo, enviadas pelo Cristiano em 21/10/2026. O que já
@@ -13,6 +13,7 @@
 // firestore-rules-v4-convites
 // firestore-rules-v5-dados-pessoais (Gestor de Tempo)
 // firestore-rules-v6-biblioteca-v4.0 (reforços [v4.0])
+// firestore-rules-v7-biblioteca-v4.3 (licença definitiva: campo [v4.3] em empresas e espelho licencas)
 //
 // ORDEM PARA PUBLICAR (importante):
 //   1) publique o fenix-core.js v4.0 no GitHub (ele passa a gravar o
@@ -91,8 +92,21 @@ service cloud.firestore {
     // ---------- Empresas ----------
     match /empresas/{empresaId} {
       allow read: if autenticado();
-      allow create: if autenticado();
+      // [v4.3] Licença definitiva (regra 58 do livro): o app NUNCA grava o campo
+      // "licenca" como definitiva. Só o Cristiano grava, pelo console do Firebase
+      // (o console não passa por estas regras). Quem cria a empresa só pode deixar
+      // o campo de fora ou usar "teste". Ninguém altera nem apaga depois.
+      allow create: if autenticado()
+        && (!('licenca' in request.resource.data) || request.resource.data.licenca == 'teste');
       allow update, delete: if false;
+    }
+
+    // ---------- [v4.3] Espelho de licença, para o login (antes de saber quem é o usuário) ----------
+    // O ID do documento é o SHA-256 do e-mail em minúsculas (FenixCore.licenca.hashEmail).
+    // Só leitura pontual (get): não dá para listar e a gravação é só pelo console.
+    match /licencas/{hashEmail} {
+      allow get: if true;
+      allow list, write: if false;
     }
 
     // ---------- Vínculo usuário -> empresa ----------
