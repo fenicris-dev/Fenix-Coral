@@ -1,4 +1,4 @@
-# GUIA DA BIBLIOTECA FÊNIX (v4.4)
+# GUIA DA BIBLIOTECA FÊNIX (v4.6)
 
 Este guia explica, em português claro, tudo o que existe na biblioteca Fênix: o que cada função do Fênix Core faz e para que serve cada regra do Livro das Regras. Ele também funciona como o **Changelog da biblioteca** (Parte 4). Acompanha todo pacote novo e é atualizado a cada versão, junto com o livro, o core, os templates e os documentos legais, que andam sempre com o mesmo número (regra 7).
 
@@ -9,6 +9,7 @@ Endereço base de tudo: https://fenicris-dev.github.io/Fenix-Core/
 | Arquivo | Onde fica | Para que serve |
 |----------------------------------------|------------------|------------------------------------------|
 | `fenix-core.js` | raiz | Biblioteca de funções que todo app carrega (módulo ES, exporta `FenixCore`). |
+| `versao.json` | raiz | Arquivo pequeno com a versão publicada do core e do livro (`{"core":"4.6","livro":"4.6"}`). O selo dos apps (regra 61) o consulta para avisar que existe core novo. Entra em todo pacote. |
 | `index.html` | raiz | Painel da biblioteca: testa cada endereço oficial, confere se tudo está na mesma versão e roda testes ao vivo de CNPJ e CEP. |
 | `firestore.rules` | raiz | Regras de segurança do Firestore: parte das publicadas no console e traz os reforços v4.0 (regra 46). Publique primeiro o core, depois as regras no console. |
 | `fenix-template-login.html` | raiz | Layout oficial de login de todo app com senha, com o farol passando ao fundo e o botão do Google escondido até a licença definitiva. |
@@ -21,7 +22,7 @@ Endereço base de tudo: https://fenicris-dev.github.io/Fenix-Core/
 | `MD/fenix-livro-das-regras.md`, `DOC/fenix-livro-das-regras.docx` | pastas `MD/` e `DOC/` | O Livro das Regras. |
 | `MD/fenix-guia-da-biblioteca.md`, `DOC/fenix-guia-da-biblioteca.docx` | pastas `MD/` e `DOC/` | Este guia. |
 
-Todo material com versão tem duas cópias (regra 11): a **neutra**, sem versão no nome (é a que os apps usam), e a **com versão no nome** (`-v4.4`), só para controle interno.
+Todo material com versão tem duas cópias (regra 11): a **neutra**, sem versão no nome (é a que os apps usam), e a **com versão no nome** (`-v4.6`), só para controle interno.
 
 ## PARTE 2. O FÊNIX CORE, FUNÇÃO POR FUNÇÃO
 
@@ -218,6 +219,35 @@ O campo se formata sozinho enquanto o usuário digita. Ninguém precisa pedir: v
 - **Como o app pinta o escuro:** com variáveis CSS, no bloco `html[data-tema="escuro"]` e no mesmo bloco dentro de `@media (prefers-color-scheme: dark)` para `html:not([data-tema="claro"])`, como nos templates de login e onboarding. Só a paleta Fênix: fundo `#020733`, cards `#041273`, texto branco, links em amarelo.
 - **Som:** o toque Asas continua em `FenixCore.som` (seção 2.15); `ligado()` e `definir()` são os mesmos que a caixa Som de abertura usa.
 
+### 2.17 Funções da linhagem v2.x, agora no core (v4.5)
+
+O Gestor do Tempo e o Controle de Compras carregavam estas funções **embutidas no app** (uma cópia do core v2.4). Elas agora fazem parte do core oficial; o app só precisa chamar `FenixCore`.
+
+- **`initFirebaseComCache(config)`:** igual a `initFirebase`, mas liga o cache offline do Firestore (IndexedDB): leituras funcionam sem internet e gravações feitas offline sobem quando a conexão volta. Chame **antes** de qualquer `init()` ou `initFirebase()` na página. Devolve `{ app, db }`.
+- **`criarModuloSincronia(db, uid, nomeApp)`:** sincronia pessoal **por coleção**, no caminho `dados_pessoais/{uid}/{nomeApp}_{coleção}/{id}` (o caminho que o Gestor e o Compras já usam, então os dados existentes continuam valendo). Cada documento é gravado por inteiro, com a hora corrigida pelo servidor.
+  - **`ouvir(coleção, aoMudar, aoErro)`:** escuta em tempo real; devolve a função que cancela. `aoMudar(mudanças, meta)` recebe `[{ tipo: "added" | "modified" | "removed", id, dados, atualizadoEm, pendente }]`.
+  - **`salvar(coleção, objeto)`:** grava um registro (o campo `id` é obrigatório). **`salvarVarios(coleção, lista)`:** grava em lotes de 400.
+  - **`excluir(coleção, id)`** e **`apagarTudo([coleções])`:** apagam um registro ou tudo do usuário nas coleções informadas.
+  - **`agora()`, `relogio()` e `medirRelogio()`:** corrigem a diferença entre o relógio do aparelho e o do servidor (medir precisa de internet).
+- **`criarModuloAcesso(db, coleção = "perfis")`:** cadastro aberto com **aprovação do administrador**. Cada pessoa tem `perfis/{uid}` com `status`: `pendente`, `aprovado` ou `bloqueado`. Funções: `obter(uid)`, `ouvir(uid, aoMudar)`, `solicitar(uid, email, nome)`, `ehAdmin(uid)` (existe `admins/{uid}`, criado à mão no console), `listar(status)`, `definirStatus(uid, status, adminUid)` e `excluir(uid)`. As regras do Firestore (blocos `perfis` e `admins`) garantem que só o administrador aprova.
+- **Login (`criarModuloAuth`), três funções a mais:** `recuperarSenha(email)` (igual a `redefinirSenha`), `reautenticar(senha)` (confirma a senha antes de uma ação sensível) e `excluirConta(senha)` (apaga a conta de quem está logado).
+- **Qual sincronia usar:** `criarSincronia` (seção 2.14) para app novo; `criarModuloSincronia` para app que já grava em `dados_pessoais/{uid}/{app}_{coleção}`, para não mudar o caminho dos dados (regra 55d).
+
+### 2.18 Selo de versões e aviso de core novo (v4.6)
+
+**`FenixCore.versoes`** (regra 61) mostra, em todo app, o selo **`v3.2 | c 4.6`**: `v` é a versão do app e `c` é a versão do core que ele está usando. Assim você vê de relance o que está atualizado.
+
+- **`versoes.core`:** a versão deste arquivo do core, por exemplo `"4.6"`.
+- **`versoes.selo("3.2")`:** devolve só o texto, `v3.2 | c 4.6` (aceita `"v3.2"` também).
+- **`versoes.montarSelo(container, "3.2", { coreMinimo, livro, verificar, detalhe })`:** desenha o selo (um botão com 44 px de altura de toque) dentro do container. `coreMinimo` é o core mais antigo que o app aceita; `livro` é a versão do Livro das Regras que o app atende (a mesma do selo da regra 53); `verificar: false` desliga a consulta pela internet; `detalhe: true` já abre a explicação (a tela Sobre usa assim).
+- **Indicador amarelo `⬆ c 4.7`:** com internet, o core lê o `versao.json` publicado; se a versão publicada for maior que a do aparelho, o selo ganha esse ponto. Ao tocar, o texto explica que basta fechar e abrir o app com internet, porque o core se atualiza sozinho ao carregar.
+- **Indicador vermelho `⚠ c 4.6+`:** o core em uso é menor que o `coreMinimo` do app (o app pode não ter as funções que usa).
+- **Sem internet:** nada de aviso e nada de erro; o selo aparece só com `v` e `c`. A consulta usa o cache do aparelho por 6 horas e tem limite de 6 segundos.
+- **`versoes.verificar({ forcar })`:** a mesma consulta, sem desenhar nada; devolve `{ online, coreEmUso, publicada: { core, livro }, nova }`. `forcar: true` ignora as 6 horas.
+- **`versoes.comparar(a, b)`:** compara versões número a número (`4.10` é maior que `4.9`).
+- **Tela Sobre:** `FenixCore.sobre.montarTela` aceita `livro` e `coreMinimo`, mostra as linhas **Core em uso** (`c`) e **Livro das Regras** (`l`) e desenha o selo com a explicação aberta.
+- **Quem mantém o `versao.json`:** o pacote da biblioteca. Ele não tem cópia com versão no nome e fica na raiz do repositório, ao lado do `fenix-core.js`.
+
 ## PARTE 3. O LIVRO DAS REGRAS, REGRA POR REGRA
 
 ### Seção 1. Arquitetura
@@ -301,6 +331,7 @@ O campo se formata sozinho enquanto o usuário digita. Ninguém precisa pedir: v
 58. **Licença definitiva (grupo H):** o botão Entrar com Google só aparece com a licença definitiva (campo `licenca = "definitiva"` na empresa, gravado só pelo console, mais o espelho `licencas/{SHA-256 do e-mail}` para a tela de login); `liberaGoogle` decide o botão e `confirmarAposGoogle` confirma depois do login; a licença pode ter validade (`licencaAte`) e, quando o Google é negado, o texto é sempre `MENSAGEM_GOOGLE`.
 59. **Animações e toque (todos os apps):** farol passando ao fundo do login e holofotes duplos de baixo para cima no splash (templates prontos, só CSS, respeitam reduzir movimento); toque Asas (Lá, Ré, Lá) sintetizado pelo core, que toca no login que deu certo e, no splash, só se o navegador já permitir; chave Som no login.
 60. **Preferências e tema escuro:** controles Som de abertura e Reduzir animações na tela Sobre ou no menu do avatar (`FenixCore.preferencias.montarTela`); tema escuro opcional no grupo J, só com a paleta Fênix, por variáveis CSS e `data-tema`; o claro segue como padrão.
+61. **Selo de versões:** todo app mostra `v3.2 | c 4.6` (app e core) ao lado da versão e na Sobre, com `FenixCore.versoes.montarSelo`; a Sobre mostra também Core e Livro; com internet o core lê o `versao.json` e avisa com ponto amarelo quando existe core mais novo (vermelho se o core for menor que o `coreMinimo` do app). Vale para todo app, sem grupo na Ficha.
 
 ### firestore.rules, bloco por bloco
 O arquivo está na raiz da biblioteca e **parte das regras publicadas no seu console** (as versões registradas no cabeçalho). O que já funcionava foi mantido; o que mudou na v4.0 está marcado com `[v4.0]`. Tudo que não está liberado é negado.
@@ -339,7 +370,7 @@ O arquivo está na raiz da biblioteca e **parte das regras publicadas no seu con
 - Mantidos como estavam no console: a regra `empresas/{id}/cidades` com `write: false` (o curinga da empresa já libera a gravação, então ela não bloqueia nada).
 
 ### Seções finais do livro
-- **Ficha de aplicação:** sempre valem as regras 1 a 3, 5 a 22, 39, 40, 47 a 53, 55, 59 e 60. Grupos marcáveis: A banco ativo (4, 46), B login (23 a 32), C PF/PJ (33 a 38, 41, 42), D produto (43), E backup (44), F PDF (45), G dashboard (54), H login com Google (56 e 58), I sincronização entre aparelhos (57), J tema escuro opcional (60). Os grupos H, I e J vêm desmarcados e são perguntados sempre.
+- **Ficha de aplicação:** sempre valem as regras 1 a 3, 5 a 22, 39, 40, 47 a 53, 55, 59, 60 e 61. Grupos marcáveis: A banco ativo (4, 46), B login (23 a 32), C PF/PJ (33 a 38, 41, 42), D produto (43), E backup (44), F PDF (45), G dashboard (54), H login com Google (56 e 58), I sincronização entre aparelhos (57), J tema escuro opcional (60). Os grupos H, I e J vêm desmarcados e são perguntados sempre.
 - **Histórico do livro:** diz o que cada versão muda para os apps e se afeta ou não.
 - **Endereços oficiais:** a lista única de endereços; só use os dela.
 - **Como entregar:** declarar a versão; nome padrão; selo e Ficha no Changelog; manual MD e PDF; duas cópias; guia da biblioteca atualizado; rodar o Painel e tocar em "Testar tudo"; teste com dois aparelhos para o grupo I; checklist de publicação quando houver `firestore.rules`; zip com `LEIAME.txt` quando houver mais de um arquivo (a pasta `versoes/` nunca sobe para a raiz do repositório); avisar se um pedido contrariar o livro.
@@ -350,6 +381,8 @@ O arquivo está na raiz da biblioteca e **parte das regras publicadas no seu con
 Cada linha diz o que mudou e o que isso exige dos apps. As versões v1.x e v2.x do core vieram antes do livro atual; as versões v3.x são niveladas entre livro, core, templates e documentos legais.
 
 ### Versões v3.x (niveladas)
+- **v4.6**: selo de versões `v | c` em todo app e aviso de core novo (regra 61); novo arquivo `versao.json`; a Sobre ganha Core e Livro; Painel testa o `versao.json` e teve a conferência de versão corrigida; a regra 61 vale sempre, sem grupo na Ficha. Afeta apps: sim, leve.
+- **v4.5**: o core oficial ganha as funções da linhagem v2.x (`initFirebaseComCache`, `criarModuloSincronia`, `criarModuloAcesso`, `recuperarSenha`, `reautenticar`, `excluirConta`), para o Gestor do Tempo e o Controle de Compras tirarem as cópias embutidas; regras 55 e 57 esclarecidas; regras do Firestore com os blocos `perfis` e `admins`. Apps: SIM, os três apps em andamento seguem o roteiro da regra 55.
 - **v4.4**: leitura de `empresas/{id}` só para o dono e membros (convite leva `empresaNome`); licença com validade (`licencaAte`, `situacao`) e `MENSAGEM_GOOGLE`; `sync.importarLista`; `FenixCore.preferencias` (som, animações, tema claro/escuro/automático); regra 60 e grupo J; checklist de publicação das regras, teste com dois aparelhos e aviso da pasta `versoes/` em Como entregar; Termos (cláusula 3, licença de uso) e Política (dados de licença e preferências) atualizados em 23/10/2026. Apps: SIM, na próxima alteração.
 - **v4.3**: login com Google só com a licença definitiva (regra 58); farol passando ao fundo do login e holofotes duplos no splash, que ganha `fenix-template-splash.html` (regra 59); toque Asas; core com `FenixCore.licenca` e `FenixCore.som`; regras do Firestore com o campo `licenca` protegido e a coleção `licencas`. Apps: SIM, na próxima alteração.
 - **v4.2**: Ficha com os grupos H (login com Google) e I (sincronização entre aparelhos), perguntados sempre; regras 56 e 57 (seção 10); core com `entrarComGoogle`, `resultadoRedirecionamento`, `redefinirSenha`, `criarModuloDadosPessoais`, `criarSincronia` e `escutar` nos dados por empresa. Apps: SIM, na próxima alteração.
@@ -378,6 +411,8 @@ Cada linha diz o que mudou e o que isso exige dos apps. As versões v1.x e v2.x 
 - **v2.1**: anotação dos apps já no padrão. Apps: não.
 
 ### Fênix Core, funções acrescentadas (nada foi removido)
+- **v4.6**: `FenixCore.versoes` (`core`, `selo`, `montarSelo`, `verificar`, `comparar`); `sobre.montarTela` aceita `livro` e `coreMinimo` e mostra Core e Livro.
+- **v4.5**: `initFirebaseComCache`, `criarModuloSincronia`, `criarModuloAcesso`; `criarModuloAuth`: `recuperarSenha`, `reautenticar`, `excluirConta` (seção 2.17).
 - **v4.4**: `licenca.situacao`, `licenca.dataLimite`, `licenca.MENSAGEM_GOOGLE` (e `ehDefinitiva` passa a respeitar `licencaAte`); `FenixCore.preferencias` (`montarTela`, `aplicar`, `animacoesReduzidas`, `animacoesReduzidasEscolhidas`, `definirAnimacoesReduzidas`, `tema`, `definirTema`); `criarSincronia().importarLista`; `criarConvite` com o 5º parâmetro `nomeEmpresa` (seções 2.7, 2.14, 2.15 e 2.16).
 - **v4.3**: `FenixCore.licenca` (`ehDefinitiva`, `daEmpresa`, `hashEmail`, `porEmail`, `lembrar`, `lembrada`, `liberaGoogle`, `confirmarAposGoogle`) e `FenixCore.som` (`tocarAbertura`, `ligado`, `definir`, `sintetizar`), seção 2.15.
 - **v4.2**: `criarModuloAuth`: `entrarComGoogle`, `resultadoRedirecionamento`, `redefinirSenha`; `criarModuloDadosPessoais`; `criarSincronia`; `criarModuloAppData.escutar` (seção 2.14).
