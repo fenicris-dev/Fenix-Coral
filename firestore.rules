@@ -1,5 +1,5 @@
 // ============================================================================
-// FÊNIX | firestore.rules (Biblioteca Fênix v4.4)
+// FÊNIX | firestore.rules (Biblioteca Fênix v4.6)
 //
 // BASE: as regras publicadas no console do Firebase (projeto fenix-core), nas
 // versões registradas abaixo, enviadas pelo Cristiano em 21/10/2026. O que já
@@ -15,6 +15,7 @@
 // firestore-rules-v6-biblioteca-v4.0 (reforços [v4.0])
 // firestore-rules-v7-biblioteca-v4.3 (licença definitiva: campo [v4.3] em empresas e espelho licencas)
 // firestore-rules-v8-biblioteca-v4.4 (empresas/{id} só para membros e para o dono [v4.4])
+// firestore-rules-v9-biblioteca-v4.5 (perfis e admins, cadastro com aprovação [v4.5])
 //
 // ORDEM PARA PUBLICAR (importante):
 //   1) publique o fenix-core.js v4.0 no GitHub (ele passa a gravar o
@@ -192,6 +193,25 @@ service cloud.firestore {
         allow read: if pertenceAEmpresa(empresaId);
         allow write: if pertenceAEmpresa(empresaId);
       }
+    }
+
+    // ---------- [v4.5] Cadastro com aprovação do administrador (FenixCore.criarModuloAcesso) ----------
+    // Só vale para app que usa criarModuloAcesso. Cada pessoa pede acesso criando o próprio perfil
+    // como "pendente"; só quem tem o documento admins/{uid} (criado à mão no console) aprova.
+    function souAdmin() {
+      return autenticado()
+        && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
+    match /admins/{uid} {
+      allow get: if autenticado() && request.auth.uid == uid;
+      allow list, write: if false;
+    }
+    match /perfis/{uid} {
+      allow get: if autenticado() && (request.auth.uid == uid || souAdmin());
+      allow list: if souAdmin();
+      allow create: if autenticado() && request.auth.uid == uid
+        && request.resource.data.get('status', '') == 'pendente';
+      allow update, delete: if souAdmin();
     }
 
     // ---------- Dados pessoais por usuário (v5: Gestor de Tempo e outros apps pessoais) ----------

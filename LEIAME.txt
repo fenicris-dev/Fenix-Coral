@@ -1,25 +1,17 @@
-Biblioteca Fênix v4.4
+Biblioteca Fênix v4.6
 
-Raiz do repositório: index.html (Painel), fenix-core.js, fenix-template-login.html, fenix-template-onboarding.html, fenix-template-splash.html, firestore.rules
+Raiz do repositório: index.html (Painel), fenix-core.js, versao.json (NOVO), fenix-template-login.html, fenix-template-onboarding.html, fenix-template-splash.html, firestore.rules
 Icon/   : Fenix_Icone_128.png (os demais ícones já estão no repositório)
-Termos/ : fenix-termos-de-uso.html, fenix-politica-de-privacidade.html (atualizados em 23/10/2026)
+Termos/ : fenix-termos-de-uso.html, fenix-politica-de-privacidade.html (só a versão mudou; o texto é o da 4.4)
 MD/     : fenix-livro-das-regras.md, fenix-guia-da-biblioteca.md (guia e changelog da biblioteca)
 DOC/    : fenix-livro-das-regras.docx, fenix-guia-da-biblioteca.docx
 versoes/: cópias com a versão no nome, só para controle interno (nenhum app aponta para elas). NUNCA suba esta pasta para a raiz do repositório.
 
-Novo na v4.4:
-- firestore.rules: empresas/{id} só para o dono e membros (o convite leva o nome da empresa).
-- Licença com validade opcional (campo licencaAte, AAAA-MM-DD), FenixCore.licenca.situacao e a mensagem única MENSAGEM_GOOGLE.
-- FenixCore.preferencias: Som de abertura, Reduzir animações e Tema claro/escuro/automático; login, splash e onboarding reagem a elas. Regra 60 e grupo J (tema escuro opcional) na Ficha.
-- sync.importarLista: importa o backup inteiro pela sincronia.
-- Termos de Uso (cláusula 3, licença de uso) e Política de Privacidade (dados de licença e preferências), redigidos sem revisão de advogado por decisão do Cristiano.
-- Checklist de publicação do firestore.rules, teste com dois aparelhos e aviso da pasta versoes/ em Como entregar; modelo de registro em Apps já no padrão.
+Novo na v4.6:
+- Selo de versões em todo app (regra 61): "v3.2 | c 4.6", onde v = versão do app e c = versão do core. Core: FenixCore.versoes (core, selo, montarSelo, verificar, comparar); a tela Sobre (sobre.montarTela) ganha as linhas Core em uso e Livro das Regras (seção 2.18 do guia).
+- versao.json (raiz, ao lado do fenix-core.js): versão publicada do core e do livro. Com internet, o selo dos apps o lê e mostra um ponto amarelo quando existe core mais novo (vermelho se o core for menor que o mínimo do app). Sem internet nada aparece. Atualize-o a cada pacote.
+- Painel: testa o versao.json e o selo; corrigida a conferência de versões (na 4.5 ele ainda comparava com a 4.4 e marcaria tudo como desatualizado).
+- Ficha: sem grupo novo; a regra 61 vale sempre.
+- firestore.rules: só mudou a versão no cabeçalho.
 
-ORDEM PARA PUBLICAR (importante, porque o core v4.4 grava o nome da empresa no convite e as regras novas fecham a leitura da empresa):
-1) core, templates, Termos e Política no GitHub;
-2) abra o Painel e toque em "Testar tudo" e em "Rodar testes ao vivo";
-3) no console do Firebase, copie as regras atuais para um arquivo de backup, cole as novas no Playground e rode o roteiro do guia (itens 1 a 11);
-4) publique as regras, abra um app real, entre e grave um registro. Se algo falhar, recoloque o backup.
-
-Licença definitiva (console do Firebase): campo licenca = definitiva em empresas/{id} e o documento licencas/ID com licenca = definitiva (ID gerado no card manual do Painel). Opcional: licencaAte = AAAA-MM-DD nos dois.
-Antes do login com Google: ative o Google em Authentication > Método de login e inclua fenicris-dev.github.io em Domínios autorizados.
+Ordem para publicar: 1) core, versao.json e templates no GitHub; 2) Painel: "Testar tudo" e "Rodar testes ao vivo" (nenhum item em amarelo); 3) as regras do Firestore só precisam ser republicadas se você ainda não publicou as da 4.5.

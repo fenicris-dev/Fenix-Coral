@@ -1,6 +1,6 @@
 /**
  * ============================================================================
- * FÊNIX CORE v4.4
+ * FÊNIX CORE v4.6
  *
  * CONVENÇÃO DE NOME (DUAS CÓPIAS A CADA ENTREGA):
  * O endereço oficial é SEMPRE fenix-core.js (sem número de versão no nome nem
@@ -263,6 +263,27 @@
         sincronia (backup, regra 44). (4) criarConvite aceita o nome da empresa
         (5º parâmetro), para o convite não depender da leitura de empresas/{id}.
         Só acréscimos; nenhuma função foi removida.
+ * v4.5 — NOVO (traz para o core oficial a linhagem v2.0-v2.4 que o Gestor do
+        Tempo e o Controle de Compras carregavam embutida nos apps, regra 1):
+        (1) initFirebaseComCache(config): como initFirebase, com cache offline
+        do Firestore. (2) criarModuloSincronia(db, uid, nomeApp): sincronia
+        pessoal por coleção em dados_pessoais/{uid}/{nomeApp}_{colecao}/{id}
+        (ouvir, salvar, salvarVarios, excluir, apagarTudo, agora, relogio,
+        medirRelogio). (3) criarModuloAcesso(db, colecao): cadastro com
+        aprovação do administrador (obter, ouvir, solicitar, ehAdmin, listar,
+        definirStatus, excluir). (4) criarModuloAuth ganha recuperarSenha
+        (igual a redefinirSenha), reautenticar(senha) e excluirConta(senha).
+        Só acréscimos; nenhuma função foi removida.
+ * v4.6 — NOVO (selo de versões, regra 61): FenixCore.versoes. (1) core: a
+        versão deste arquivo ("4.6"). (2) selo(versaoApp): texto "v3.2 | c 4.6",
+        onde v = versão do app e c = versão do core em uso. (3) montarSelo(
+        container, versaoApp, { coreMinimo, livro }): desenha o selo no app e,
+        com internet, consulta versao.json no GitHub Pages e acrescenta um
+        indicador amarelo quando existe core mais novo (ou vermelho quando o
+        core em uso é menor que o mínimo exigido pelo app). (4) verificar():
+        a mesma consulta, sem desenhar nada. Sem internet não mostra aviso
+        nem erro. FenixCore.sobre.montarTela ganha as linhas Core e Livro e o
+        selo (opções livro e coreMinimo). Só acréscimos.
  * ============================================================================
  */
 
@@ -270,12 +291,15 @@ import { initializeApp, getApps, getApp } from "https://www.gstatic.com/firebase
 import {
   getFirestore, doc, getDoc, setDoc, updateDoc, deleteDoc,
   collection, getDocs, query, where, orderBy, limit as fsLimit,
-  serverTimestamp, onSnapshot
+  serverTimestamp, onSnapshot,
+  initializeFirestore, persistentLocalCache, persistentMultipleTabManager,
+  writeBatch, getDocFromServer
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import {
   getAuth, onAuthStateChanged, signInWithEmailAndPassword,
   createUserWithEmailAndPassword, signOut,
   GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult, sendPasswordResetEmail
+  , EmailAuthProvider, reauthenticateWithCredential, deleteUser
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 
 // ============================================================================
@@ -332,6 +356,18 @@ function init(nomeApp) {
  * intercambiáveis e nunca criam apps Firebase duplicados.
  * @param {object} config - opcional; usa firebaseConfig padrão se omitido
  */
+function initFirebaseComCache(config) {
+  const app = _obterAppFirebase(config);
+  try {
+    _db = initializeFirestore(app, {
+      localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() })
+    });
+  } catch (e) {
+    _db = getFirestore(app);
+  }
+  return { app, db: _db };
+}
+
 function initFirebase(config) {
   const app = _obterAppFirebase(config);
   _db = getFirestore(app);
@@ -839,6 +875,24 @@ function criarModuloAuth(app) {
     /** Envia o e-mail de redefinição de senha. */
     redefinirSenha(email) {
       return sendPasswordResetEmail(auth, email).then(() => true);
+    },
+    /** Igual a redefinirSenha (nome usado pelos apps da linhagem v2.x). */
+    recuperarSenha(email) {
+      return sendPasswordResetEmail(auth, email);
+    },
+    /** Confirma a senha do usuário logado (útil antes de ações sensíveis). */
+    async reautenticar(senha) {
+      const u = auth.currentUser;
+      if (!u) throw new Error("Nenhum usuário logado.");
+      await reauthenticateWithCredential(u, EmailAuthProvider.credential(u.email, senha));
+      return true;
+    },
+    /** Apaga a conta do usuário logado (pede a senha para confirmar). */
+    async excluirConta(senha) {
+      const u = auth.currentUser;
+      if (!u) throw new Error("Nenhum usuário logado.");
+      await reauthenticateWithCredential(u, EmailAuthProvider.credential(u.email, senha));
+      return deleteUser(u);
     },
     usuarioAtual() {
       return auth.currentUser;
@@ -1350,6 +1404,14 @@ function _injetarEstilos() {
     "button.fx-dash-item:hover,button.fx-dash-item:focus-visible{border-color:#ffcb00;outline:none}",
     ".fx-btn{font:inherit;cursor:pointer;min-height:44px;padding:10px 16px;border-radius:8px;border:0;background:#0076CE;color:#fff;font-weight:600}",
     ".fx-btn:hover,.fx-btn:focus-visible{background:#ffcb00;color:#020733;outline:none}",
+    ".fx-selo{display:inline-flex;align-items:center;gap:6px;font:inherit;font-size:12px;color:inherit;opacity:.95;background:none;border:0;padding:0;min-height:0}",
+    ".fx-selo b{font-weight:700}",
+    "button.fx-selo{cursor:pointer;min-height:44px;padding:0 6px}",
+    ".fx-selo-ponto{display:inline-flex;align-items:center;gap:3px;border-radius:10px;padding:1px 7px;background:#ffcb00;color:#041273;font-weight:700}",
+    ".fx-selo-ponto.fx-vermelho{background:#c62828;color:#fff}",
+    ".fx-selo-msg{font-size:13px;margin:6px 0 0;padding:8px 10px;border-radius:8px;background:#eef1fa;color:#020733;border-left:4px solid #0076CE}",
+    ".fx-selo-msg.fx-amarelo{background:#fffbe6;border-left-color:#ffcb00}",
+    ".fx-selo-msg.fx-vermelho{background:#fdecec;border-left-color:#c62828}",
     ".fx-manual{color:#020733;line-height:1.5}",
     ".fx-manual h1,.fx-manual h2,.fx-manual h3{color:#041273;margin:1.2em 0 .4em}",
     ".fx-manual img{max-width:100%;height:auto;border:1px solid #d9deef;border-radius:8px;margin:8px 0}",
@@ -1522,7 +1584,7 @@ Object.assign(sobre, {
     const alvo = _resolverContainer(container);
     if (!alvo) throw new Error("sobre.montarTela: container não encontrado.");
     _injetarEstilos();
-    const { nomeApp, titulo, versao, changelog } = opcoes;
+    const { nomeApp, titulo, versao, changelog, livro, coreMinimo } = opcoes;
     if (!nomeApp) throw new Error("sobre.montarTela: informe nomeApp.");
     const info = sobre.obter(nomeApp);
     const datas = sobre.datasDoApp(changelog);
@@ -1534,7 +1596,9 @@ Object.assign(sobre, {
       ["Primeiro acesso", info ? info.primeiroAcessoTexto : "—"],
       ["Última atualização", info ? info.ultimaAtualizacaoTexto : "—"],
       ["Criado em", datas.criadoEmTexto || "—"],
-      ["Última modificação", datas.ultimaModificacaoTexto || "—"]
+      ["Última modificação", datas.ultimaModificacaoTexto || "—"],
+      ["Core em uso", "c " + versoes.core],
+      ["Livro das Regras", livro ? "l " + _semV(livro) : "—"]
     ];
     alvo.innerHTML =
       '<div style="color:#020733;line-height:1.45">' +
@@ -1546,10 +1610,13 @@ Object.assign(sobre, {
       '<div style="background:#fff;border-radius:10px;padding:10px 12px;margin:0 0 14px;box-shadow:0 1px 4px rgba(2,7,51,.12);font-size:14px">' +
       "<strong>" + _esc(EMPRESA.nome) + "</strong><br>" + _esc(EMPRESA.razaoSocial) + " · CNPJ " + _esc(EMPRESA.cnpjFormatado) +
       "<br>" + _esc(EMPRESA.email) + "</div>" +
+      '<div style="margin:0 0 14px" data-fx-selo-sobre></div>' +
       '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin:0 0 8px">' +
       '<h3 style="color:#041273;margin:0">Changelog</h3>' +
       '<button type="button" class="fx-btn" data-fx-changelog-pdf>Baixar Changelog (PDF)</button></div>' +
       sobre.changelogHTML(changelog) + "</div>";
+    const slotSelo = alvo.querySelector("[data-fx-selo-sobre]");
+    if (slotSelo && versaoAtual) versoes.montarSelo(slotSelo, versaoAtual, { coreMinimo, livro, detalhe: true });
     const btn = alvo.querySelector("[data-fx-changelog-pdf]");
     if (btn) btn.addEventListener("click", () => {
       sobre.baixarChangelogPDF(nomeApp, changelog, { versao: versaoAtual, titulo }).catch(e => {
@@ -2716,12 +2783,308 @@ const preferencias = {
 if (typeof document !== "undefined") { try { preferencias.aplicar(); } catch (e) {} }
 
 // ============================================================================
+// 20. SINCRONIA PESSOAL POR COLEÇÃO (v4.5, linhagem v2.x) — dados privados do usuário, multi-aparelho
+// ============================================================================
+/**
+ * Estrutura: dados_pessoais/{uid}/{nomeApp}_{colecao}/{id}
+ * Cada documento é gravado por inteiro (a última gravação vale) e leva o campo
+ * interno "_u" (horário corrigido pelo servidor, em ms), que não é devolvido
+ * ao app: o app recebe "atualizadoEm" à parte.
+ * @param {object} db - de initFirebaseComCache() (ou initFirebase())
+ * @param {string} uid - uid do usuário logado
+ * @param {string} nomeApp - namespace do app, ex: "fenix-tempo"
+ */
+function criarModuloSincronia(db, uid, nomeApp) {
+  if (!uid) throw new Error("criarModuloSincronia: faltou o uid do usuário logado.");
+  if (!nomeApp) throw new Error("criarModuloSincronia: faltou o nomeApp.");
+  const CHAVE_RELOGIO = "fenix_relogio__" + nomeApp;
+  let offset = 0;
+  try { const v = Number(localStorage.getItem(CHAVE_RELOGIO)); if (isFinite(v)) offset = v; } catch (e) { /* sem storage */ }
+  const nomeCol = nome => nomeApp + "_" + nome;
+  const col = nome => collection(db, "dados_pessoais", uid, nomeCol(nome));
+  const ref = (nome, id) => doc(db, "dados_pessoais", uid, nomeCol(nome), String(id));
+  const agora = () => Date.now() + offset;
+  // Firestore não aceita "undefined": remove-os (e copia o objeto).
+  const limpar = obj => JSON.parse(JSON.stringify(obj));
+  const comMarca = obj => ({ ...limpar(obj), _u: agora() });
+
+  return {
+    /** Horário atual corrigido pela diferença com o servidor. */
+    agora,
+    /** Diferença atual (ms) entre o servidor e o relógio do aparelho. */
+    relogio() { return offset; },
+
+    /**
+     * Escuta uma coleção em tempo real.
+     * aoMudar(mudancas, meta): mudancas = [{tipo:"added"|"modified"|"removed", id, dados,
+     *   atualizadoEm, pendente}]; pendente=true é uma gravação deste aparelho ainda não
+     *   confirmada. meta = {doCache, pendente}; doCache=true quando veio só do cache.
+     * @returns {function} cancela a escuta
+     */
+    ouvir(nome, aoMudar, aoErro) {
+      return onSnapshot(col(nome), snap => {
+        const mudancas = snap.docChanges().map(c => {
+          const dados = c.doc.data();
+          const atualizadoEm = dados._u || 0;
+          delete dados._u;
+          return { tipo: c.type, id: c.doc.id, dados, atualizadoEm, pendente: c.doc.metadata.hasPendingWrites };
+        });
+        aoMudar(mudancas, { doCache: snap.metadata.fromCache, pendente: snap.metadata.hasPendingWrites });
+      }, err => {
+        if (typeof aoErro === "function") aoErro(err);
+        else console.error("FenixCore.sincronia:", err);
+      });
+    },
+
+    /** Grava (substitui) um documento; obj.id é obrigatório. */
+    salvar(nome, obj) {
+      if (!obj || obj.id == null) return Promise.reject(new Error(nome + ": registro sem id."));
+      return setDoc(ref(nome, obj.id), comMarca(obj));
+    },
+
+    /** Grava vários documentos (em lotes de 400). */
+    async salvarVarios(nome, lista) {
+      for (let i = 0; i < lista.length; i += 400) {
+        const lote = writeBatch(db);
+        lista.slice(i, i + 400).forEach(o => {
+          if (o == null || o.id == null) throw new Error(nome + ": registro sem id.");
+          lote.set(ref(nome, o.id), comMarca(o));
+        });
+        await lote.commit();
+      }
+      return true;
+    },
+
+    excluir(nome, id) {
+      if (id == null) return Promise.reject(new Error(nome + ": faltou o id para excluir."));
+      return deleteDoc(ref(nome, id));
+    },
+
+    /** Apaga TODOS os documentos do usuário nas coleções informadas (ex.: ["dias","regs"]). */
+    async apagarTudo(colecoes) {
+      for (const nome of colecoes) {
+        const snap = await getDocs(col(nome));
+        const docs = snap.docs;
+        for (let i = 0; i < docs.length; i += 400) {
+          const lote = writeBatch(db);
+          docs.slice(i, i + 400).forEach(d => lote.delete(d.ref));
+          await lote.commit();
+        }
+      }
+      return true;
+    },
+
+    /**
+     * Mede a diferença entre o relógio do aparelho e o do servidor (ms) e guarda
+     * no aparelho. Precisa de internet; sem resposta em 8 s mantém o valor anterior.
+     */
+    async medirRelogio() {
+      const r = doc(db, "dados_pessoais", uid, nomeCol("sistema"), "relogio");
+      const medir = (async () => {
+        const t0 = Date.now();
+        await setDoc(r, { t: serverTimestamp() });
+        const t1 = Date.now();
+        const snap = await getDocFromServer(r);
+        const t = snap.data() && snap.data().t;
+        if (!t || !t.toMillis) return offset;
+        return Math.round(t.toMillis() - (t0 + t1) / 2);
+      })();
+      const limite = new Promise(res => setTimeout(() => res(null), 8000));
+      const novo = await Promise.race([medir, limite]).catch(() => null);
+      if (novo != null && isFinite(novo)) {
+        offset = novo;
+        try { localStorage.setItem(CHAVE_RELOGIO, String(offset)); } catch (e) { /* sem storage */ }
+      }
+      return offset;
+    }
+  };
+}
+
+// ============================================================================
+// 21. ACESSO COM APROVAÇÃO (v4.5, linhagem v2.x) — cadastro aberto, liberação pelo administrador
+// ============================================================================
+/**
+ * Estrutura: {colecao}/{uid} -> { email, nome, status, criadoEm, decididoEm, decididoPor }
+ *            admins/{uid}    -> documento qualquer, criado à mão no console (quem tem é administrador)
+ * status: "pendente" (recém-cadastrado) | "aprovado" | "bloqueado".
+ * Quem aprova é o administrador; as regras do firestore.rules garantem isso.
+ * @param {object} db
+ * @param {string} colecao - padrão "perfis"
+ */
+function criarModuloAcesso(db, colecao = "perfis") {
+  const ref = uid => doc(db, colecao, uid);
+  return {
+    obter(uid) {
+      return getDoc(ref(uid)).then(s => s.exists() ? { uid: s.id, ...s.data() } : null);
+    },
+    /** Acompanha o perfil em tempo real (ex.: para liberar o app quando for aprovado). */
+    ouvir(uid, aoMudar, aoErro) {
+      return onSnapshot(ref(uid), s => aoMudar(s.exists() ? { uid: s.id, ...s.data() } : null),
+        err => { if (typeof aoErro === "function") aoErro(err); });
+    },
+    /** Pede acesso: cria o perfil como "pendente". */
+    solicitar(uid, email, nome) {
+      return setDoc(ref(uid), {
+        email: (email || "").toString().trim().toLowerCase(),
+        nome: (nome || "").toString().trim(),
+        status: "pendente",
+        criadoEm: serverTimestamp()
+      });
+    },
+    /** true se o usuário é administrador (existe admins/{uid}). */
+    ehAdmin(uid) {
+      return getDoc(doc(db, "admins", uid)).then(s => s.exists()).catch(() => false);
+    },
+    /** Só administrador. status = "pendente" | "aprovado" | "bloqueado" | null (todos). */
+    listar(status = null) {
+      const q = status ? query(collection(db, colecao), where("status", "==", status)) : collection(db, colecao);
+      return getDocs(q).then(s => s.docs.map(d => ({ uid: d.id, ...d.data() })));
+    },
+    /** Só administrador. */
+    definirStatus(uid, status, adminUid) {
+      return updateDoc(ref(uid), { status, decididoEm: serverTimestamp(), decididoPor: adminUid || null });
+    },
+    excluir(uid) {
+      return deleteDoc(ref(uid));
+    }
+  };
+}
+
+
+// ============================================================================
+// 22. SELO DE VERSÕES (v4.6, regra 61) — "v3.2 | c 4.6" + aviso de core novo
+// ============================================================================
+
+const _CORE_VERSAO = "4.6";
+const _VERSOES_URL = "https://fenicris-dev.github.io/Fenix-Core/versao.json";
+const _VERSOES_CHAVE = "fenix_versoes_check";
+const _VERSOES_INTERVALO = 6 * 60 * 60 * 1000; // consulta a rede no máximo a cada 6 horas
+
+function _cmpVersao(a, b) {
+  const pa = _semV(a).split(".").map(n => parseInt(n, 10) || 0);
+  const pb = _semV(b).split(".").map(n => parseInt(n, 10) || 0);
+  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+    const d = (pa[i] || 0) - (pb[i] || 0);
+    if (d) return d > 0 ? 1 : -1;
+  }
+  return 0;
+}
+
+const versoes = {
+  /** Versão deste arquivo do core, por exemplo "4.6". */
+  core: _CORE_VERSAO,
+
+  /** Compara duas versões ("4.10" > "4.9"). Retorna 1, 0 ou -1. */
+  comparar: _cmpVersao,
+
+  /** Texto do selo: selo("3.2") ou selo("v3.2") → "v3.2 | c 4.6". */
+  selo(versaoApp) {
+    const v = _semV(versaoApp);
+    return (v ? "v" + v + " | " : "") + "c " + _CORE_VERSAO;
+  },
+
+  /**
+   * Consulta o versao.json publicado (só com internet). Nunca lança erro.
+   * @param {object} [opcoes] - { url, forcar (ignora o intervalo de 6 h), tempoMs (padrão 6000) }
+   * @returns {Promise<{online:boolean, coreEmUso:string, publicada:{core:string,livro:string}|null, nova:boolean}>}
+   */
+  async verificar(opcoes = {}) {
+    const base = { online: false, coreEmUso: _CORE_VERSAO, publicada: null, nova: false };
+    try {
+      if (typeof navigator !== "undefined" && navigator.onLine === false) return base;
+      if (typeof fetch !== "function") return base;
+      if (!opcoes.forcar) {
+        try {
+          const g = JSON.parse(localStorage.getItem(_VERSOES_CHAVE) || "null");
+          if (g && g.publicada && Date.now() - g.em < _VERSOES_INTERVALO)
+            return { online: true, coreEmUso: _CORE_VERSAO, publicada: g.publicada, nova: _cmpVersao(g.publicada.core, _CORE_VERSAO) > 0 };
+        } catch (e) { /* sem localStorage: segue para a rede */ }
+      }
+      const ctl = typeof AbortController === "function" ? new AbortController() : null;
+      const t = ctl ? setTimeout(() => ctl.abort(), opcoes.tempoMs || 6000) : null;
+      let resp;
+      try {
+        const url = (opcoes.url || _VERSOES_URL) + "?t=" + Date.now();
+        resp = await fetch(url, { cache: "no-store", signal: ctl ? ctl.signal : undefined });
+      } finally { if (t) clearTimeout(t); }
+      if (!resp || !resp.ok) return base;
+      const j = await resp.json();
+      if (!j || !j.core) return base;
+      const publicada = { core: _semV(j.core), livro: j.livro ? _semV(j.livro) : "" };
+      try { localStorage.setItem(_VERSOES_CHAVE, JSON.stringify({ em: Date.now(), publicada })); } catch (e) { /* ok */ }
+      return { online: true, coreEmUso: _CORE_VERSAO, publicada, nova: _cmpVersao(publicada.core, _CORE_VERSAO) > 0 };
+    } catch (e) {
+      return base;
+    }
+  },
+
+  /**
+   * Desenha o selo "v3.2 | c 4.6" dentro do container e, com internet,
+   * acrescenta o indicador de core novo (amarelo) ou de core abaixo do
+   * mínimo (vermelho). Tocar no selo mostra a explicação.
+   * @param {Element|string} container
+   * @param {string} versaoApp - versão do app, por exemplo "3.2"
+   * @param {object} [opcoes] - { coreMinimo, livro, verificar (padrão true), detalhe (mostra a explicação aberta) }
+   * @returns {Element} o elemento do selo
+   */
+  montarSelo(container, versaoApp, opcoes = {}) {
+    const alvo = _resolverContainer(container);
+    if (!alvo) throw new Error("versoes.montarSelo: container não encontrado.");
+    _injetarEstilos();
+    const { coreMinimo, livro } = opcoes;
+    const abaixo = !!coreMinimo && _cmpVersao(_CORE_VERSAO, coreMinimo) < 0;
+    const el = document.createElement("button");
+    el.type = "button";
+    el.className = "fx-selo";
+    el.setAttribute("data-fx-selo", "");
+    const msg = document.createElement("div");
+    msg.hidden = !opcoes.detalhe;
+    const texto = () => {
+      const l = ["v = versão do app, c = versão do core" + (livro ? ", l = versão do Livro das Regras (" + _semV(livro) + ")" : "") + "."];
+      return l.join(" ");
+    };
+    const pintar = (estado) => {
+      let ponto = "";
+      let aviso = texto();
+      let vermelho = false, amarelo = false;
+      if (abaixo) {
+        ponto = '<span class="fx-selo-ponto fx-vermelho">⚠ c ' + _esc(_semV(coreMinimo)) + "+</span>";
+        aviso = "Este app exige o core " + _semV(coreMinimo) + " ou mais novo e está com o " + _CORE_VERSAO + ". Feche e abra o app com internet para atualizar. " + aviso;
+        vermelho = true;
+      } else if (estado && estado.nova) {
+        ponto = '<span class="fx-selo-ponto">⬆ c ' + _esc(estado.publicada.core) + "</span>";
+        amarelo = true;
+        aviso = "Existe o core " + estado.publicada.core + " (este app usa o " + _CORE_VERSAO + "). Feche e abra o app com internet para atualizar. " + aviso;
+      } else if (estado && estado.online) {
+        aviso = "Core em dia (versão publicada: " + estado.publicada.core + "). " + aviso;
+      }
+      el.innerHTML = "<b>" + _esc(versoes.selo(versaoApp)) + "</b>" + ponto;
+      el.title = aviso;
+      el.setAttribute("aria-label", "Versões: " + versoes.selo(versaoApp) + ". " + aviso);
+      msg.textContent = aviso;
+      msg.className = "fx-selo-msg" + (vermelho ? " fx-vermelho" : amarelo ? " fx-amarelo" : "");
+      el.dataset.estado = abaixo ? "abaixo" : (estado && estado.nova ? "nova" : (estado && estado.online ? "ok" : "desconhecido"));
+    };
+    pintar(null);
+    el.addEventListener("click", () => { msg.hidden = !msg.hidden; });
+    alvo.innerHTML = "";
+    alvo.appendChild(el);
+    alvo.appendChild(msg);
+    if (opcoes.verificar !== false) {
+      versoes.verificar().then(est => { if (el.isConnected) pintar(est); });
+    }
+    return el;
+  }
+};
+
+// ============================================================================
 // EXPORTAÇÃO
 // ============================================================================
 
 export const FenixCore = {
   init,
   initFirebase,
+  initFirebaseComCache,
   criarModuloAuth,
   criarModuloEmpresas,
   criarModuloConvites,
@@ -2734,9 +3097,12 @@ export const FenixCore = {
   criarModuloPessoas,
   criarModuloDadosPessoais,
   criarSincronia,
+  criarModuloSincronia,
+  criarModuloAcesso,
   licenca,
   som,
   preferencias,
+  versoes,
   pessoas,
   produtos,
   localidades,
